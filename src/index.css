@@ -1,0 +1,125 @@
+@import "tailwindcss";
+
+:root,
+[data-theme="violet"] {
+  --brand: #8b5cf6;
+  --brand-hover: #7c3aed;
+  --brand-light: #a78bfa;
+  --brand-glow: rgba(139, 92, 246, 0.35);
+  --brand-soft: rgba(139, 92, 246, 0.14);
+  --accent-secondary: #06b6d4;
+}
+
+[data-theme="kick"] {
+  --brand: #10b981;
+  --brand-hover: #059669;
+  --brand-light: #34d399;
+  --brand-glow: rgba(16, 185, 129, 0.35);
+  --brand-soft: rgba(16, 185, 129, 0.14);
+  --accent-secondary: #84cc16;
+}
+
+[data-theme="coral"] {
+  --brand: #f43f5e;
+  --brand-hover: #e11d48;
+  --brand-light: #fb7185;
+  --brand-glow: rgba(244, 63, 94, 0.35);
+  --brand-soft: rgba(244, 63, 94, 0.14);
+  --accent-secondary: #f59e0b;
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: #0e0e12;
+  color: #f4f4f6;
+  overflow-x: hidden;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-family: 'JetBrains Mono', 'Plus Jakarta Sans', monospace;
+}
+
+/* Custom sleek dark scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #121218;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a2a36;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f52;
+}
+
+@keyframes floatUpHeart {
+  0% {
+    transform: translateY(0) scale(0.6) rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-110px) scale(1.15) rotate(-12deg);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(-230px) scale(0.85) rotate(14deg);
+    opacity: 0;
+  }
+}
+
+.animate-float-heart {
+  animation: floatUpHeart 2.1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes giftSlideIn {
+  0% {
+    transform: translateX(-40px) scale(0.85);
+    opacity: 0;
+  }
+  15% {
+    transform: translateX(0) scale(1.04);
+    opacity: 1;
+  }
+  25% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+  85% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-16px) scale(0.95);
+    opacity: 0;
+  }
+}
+
+.animate-gift-banner {
+  animation: giftSlideIn 3.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes pulseRing {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+.live-pulse {
+  animation: pulseRing 2s infinite;
+}
