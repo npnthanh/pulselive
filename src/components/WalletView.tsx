@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { LiveProduct } from '../data/mockData';
 import type { ActiveTab } from './Navbar';
+import { AnimatedArrow } from './AnimatedArrow';
 
 interface WalletViewProps {
   coins: number;
@@ -68,9 +69,10 @@ export const WalletView: React.FC<WalletViewProps> = ({
 
         <button
           onClick={() => setActiveTab('watch')}
-          className="px-5 py-2.5 rounded-xl bg-white text-slate-950 font-extrabold text-xs shadow-lg hover:bg-zinc-200 transition-colors cursor-pointer shrink-0"
+          className="group inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-white text-slate-950 font-extrabold text-xs shadow-lg hover:bg-zinc-200 transition-colors cursor-pointer shrink-0"
         >
-          ← Quay lại Phòng Live dùng Xu
+          <AnimatedArrow direction="left" />
+          Quay lại Phòng Live dùng Xu
         </button>
       </div>
 
@@ -245,9 +247,10 @@ export const WalletView: React.FC<WalletViewProps> = ({
                 </p>
                 <button
                   onClick={() => setActiveTab('watch')}
-                  className="text-xs font-bold text-amber-400 hover:underline cursor-pointer"
+                  className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-amber-400 hover:text-amber-300 hover:bg-amber-400/10 transition-colors cursor-pointer"
                 >
-                  Vào Phòng Live chọn chế độ "Live Bán Hàng" để săn Flash Sale →
+                  Vào Phòng Live chọn chế độ "Live Bán Hàng" để săn Flash Sale
+                  <AnimatedArrow />
                 </button>
               </div>
             ) : (

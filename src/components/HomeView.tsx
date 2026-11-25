@@ -20,6 +20,7 @@ import {
   type StreamChannel,
 } from '../data/mockData';
 import type { ActiveTab, BrandTheme } from './Navbar';
+import { AnimatedArrow } from './AnimatedArrow';
 
 interface HomeViewProps {
   onSelectChannel: (channel: StreamChannel) => void;
@@ -238,9 +239,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   onSelectChannel(featuredChannel);
                   setActiveTab('watch');
                 }}
-                className="text-white font-semibold hover:underline cursor-pointer"
+                className="group inline-flex items-center gap-1.5 pl-3 pr-2.5 py-1 rounded-lg text-white font-semibold hover:bg-white/8 transition-colors cursor-pointer"
               >
-                Trải nghiệm →
+                Trải nghiệm
+                <AnimatedArrow />
               </button>
             </div>
           </div>

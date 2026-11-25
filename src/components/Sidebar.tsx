@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { STREAM_CHANNELS, type StreamChannel } from '../data/mockData';
 import type { ActiveTab } from './Navbar';
+import { AnimatedArrow } from './AnimatedArrow';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -203,9 +204,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </p>
           <button
             onClick={() => setActiveTab('watch')}
-            className="mt-2.5 w-full py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-bold text-white transition-colors cursor-pointer"
+            className="group mt-2.5 w-full py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-bold text-white transition-colors cursor-pointer inline-flex items-center justify-center gap-1.5"
           >
-            Vào Xem & Nhận Quà →
+            Vào Xem & Nhận Quà
+            <AnimatedArrow />
           </button>
         </div>
       )}

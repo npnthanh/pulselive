@@ -28,6 +28,9 @@ import {
   Plus,
   Check,
   X,
+  Info,
+  Crown,
+  CalendarClock,
 } from 'lucide-react';
 import {
   type StreamChannel,
@@ -94,11 +97,8 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
   onAddToCart,
   cartItems,
 }) => {
-  // Stream mode state (defaults to channel's mode, but user can switch anytime to preview all 3 UI paradigms)
-  const [streamMode, setStreamMode] = useState<StreamMode>(channel.mode);
-  useEffect(() => {
-    setStreamMode(channel.mode);
-  }, [channel]);
+  // Room layout follows the channel's stream type (standard / PK battle / live commerce)
+  const streamMode: StreamMode = channel.mode;
 
   // Video Player Controls
   const [isPlaying, setIsPlaying] = useState(true);
@@ -323,83 +323,9 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
     <div className="flex-1 flex flex-col lg:flex-row h-[calc(100vh-4rem)] overflow-hidden bg-[#0E0E12]">
       {/* CENTER COLUMN: VIDEO STAGE + STREAMER INFO + GIFT DOCK */}
       <div className="flex-1 flex flex-col overflow-y-auto min-w-0">
-        {/* Top Mode Switcher Bar (Allows testing Standard, PK Battle, and Live Commerce layouts) */}
-        <div className="bg-[#14141D] border-b border-white/8 px-4 py-2 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 mr-1">
-              Giao diện Phòng Live:
-            </span>
-            <button
-              onClick={() => setStreamMode('standard')}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                streamMode === 'standard'
-                  ? 'bg-white text-slate-950 shadow'
-                  : 'bg-white/5 text-zinc-300 hover:bg-white/10'
-              }`}
-            >
-              <span>🎮 Chuẩn 16:9 (Twitch/Kick)</span>
-            </button>
-            <button
-              onClick={() => setStreamMode('pk')}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                streamMode === 'pk'
-                  ? 'bg-gradient-to-r from-pink-600 to-purple-600 text-white shadow'
-                  : 'bg-white/5 text-zinc-300 hover:bg-white/10'
-              }`}
-            >
-              <Swords className="w-3.5 h-3.5" />
-              <span>Đấu PK Đôi (TikTok/Bigo)</span>
-            </button>
-            <button
-              onClick={() => setStreamMode('commerce')}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                streamMode === 'commerce'
-                  ? 'bg-amber-400 text-slate-950 shadow'
-                  : 'bg-white/5 text-zinc-300 hover:bg-white/10'
-              }`}
-            >
-              <ShoppingBag className="w-3.5 h-3.5" />
-              <span>Live Bán Hàng (Shopee/TikTok Shop)</span>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setTheaterMode(!theaterMode)}
-              className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors cursor-pointer flex items-center gap-1.5 ${
-                theaterMode
-                  ? 'bg-violet-500/20 text-violet-300 border-violet-500/40'
-                  : 'bg-white/5 text-zinc-300 border-white/10 hover:bg-white/10'
-              }`}
-              title="Ẩn thanh bên trái để mở rộng không gian xem"
-            >
-              {theaterMode ? (
-                <>
-                  <Minimize2 className="w-3.5 h-3.5" /> Thoát Rạp Chiếu Phim
-                </>
-              ) : (
-                <>
-                  <Maximize2 className="w-3.5 h-3.5" /> Chế Độ Rạp Chiếu Phim
-                </>
-              )}
-            </button>
-
-            <button
-              onClick={onEnablePiP}
-              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10 transition-colors cursor-pointer flex items-center gap-1.5"
-              title="Thu nhỏ video góc phải và quay về Trang chủ"
-            >
-              <PictureInPicture2 className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Thu Nhỏ (PiP)</span>
-            </button>
-          </div>
-        </div>
-
         {/* MAIN VIDEO PLAYER STAGE */}
         <div
-          className={`relative w-full bg-black overflow-hidden select-none group ${
-            theaterMode ? 'h-[68vh]' : 'aspect-video max-h-[64vh]'
-          }`}
+          className="relative w-full shrink-0 bg-black overflow-hidden select-none group aspect-video max-h-[calc(100vh-4rem)]"
         >
           {/* MODE 1 & 3: SINGLE STREAM STAGE */}
           {streamMode !== 'pk' ? (
@@ -417,7 +343,7 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
             /* MODE 2: PK BATTLE SPLIT-SCREEN STAGE (TikTok/Bigo PK UI) */
             <div className="relative w-full h-full flex flex-col bg-[#101018]">
               {/* PK Top Health / Score Bar */}
-              <div className="relative z-20 px-4 pt-3 pb-2 bg-gradient-to-b from-black/90 to-transparent">
+              <div className="relative z-20 px-4 pt-13 pb-2 bg-gradient-to-b from-black/90 to-transparent">
                 <div className="flex items-center justify-between text-xs font-extrabold mb-1.5">
                   <div className="flex items-center gap-2 text-cyan-300">
                     <span className="px-2 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/40">
@@ -568,7 +494,7 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
 
           {/* LIVE COMMERCE PINNED PRODUCT OVERLAY (When in Commerce mode) */}
           {streamMode === 'commerce' && (
-            <div className="absolute bottom-14 left-4 z-30 w-80 sm:w-96 bg-[#161621]/95 backdrop-blur-xl border border-amber-400/40 rounded-2xl p-3 shadow-2xl">
+            <div className="absolute bottom-24 left-4 z-30 w-80 sm:w-96 bg-[#161621]/95 backdrop-blur-xl border border-amber-400/40 rounded-2xl p-3 shadow-2xl">
               <div className="flex items-center justify-between mb-2">
                 <span className="px-2 py-0.5 rounded bg-amber-400 text-slate-950 text-[10px] font-extrabold uppercase">
                   🔥 {pinnedProduct.badge} • Flash Sale 09:42
@@ -622,7 +548,7 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
           )}
 
           {/* FLOATING HEARTS REACTION STREAM (Right Edge of Video) */}
-          <div className="absolute bottom-14 right-5 w-20 h-56 pointer-events-none overflow-hidden z-20">
+          <div className="absolute bottom-24 right-3 w-20 h-56 pointer-events-none overflow-hidden z-20">
             {floatingHearts.map((h) => (
               <span
                 key={h.id}
@@ -635,7 +561,7 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
           </div>
 
           {/* Floating Heart Trigger Button & Shopping Bag Trigger on Video Right */}
-          <div className="absolute bottom-14 right-4 z-30 flex flex-col items-center gap-2">
+          <div className="absolute bottom-24 right-4 z-30 flex flex-col items-center gap-2.5">
             {streamMode === 'commerce' && (
               <button
                 onClick={() => setShowShopDrawer(!showShopDrawer)}
@@ -651,7 +577,7 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
 
             <button
               onClick={triggerHeart}
-              className="p-3 rounded-2xl bg-rose-600/90 hover:bg-rose-500 text-white shadow-xl border border-white/20 transition-transform active:scale-90 cursor-pointer"
+              className="p-3 rounded-full bg-rose-600/90 hover:bg-rose-500 text-white shadow-lg shadow-rose-900/40 ring-1 ring-white/20 transition-transform hover:scale-105 active:scale-90 cursor-pointer"
               title="Thả tim cổ vũ Streamer"
             >
               <Heart className="w-5 h-5 fill-white" />
@@ -659,42 +585,45 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
           </div>
 
           {/* VIDEO PLAYER BOTTOM CONTROLS & DVR BAR */}
-          <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/95 via-black/70 to-transparent px-4 pt-6 pb-2.5">
+          <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/90 via-black/55 to-transparent px-4 pt-8 pb-2.5">
             {/* DVR Seekbar (YouTube Live style scrubbable progress) */}
-            <div className="flex items-center gap-2.5 mb-2">
+            <div className="relative h-4 flex items-center group/seek">
+              <div className="absolute inset-x-0 h-1 group-hover/seek:h-1.5 rounded-full bg-white/20 overflow-hidden transition-all">
+                <div
+                  className={`h-full ${dvrPosition < 100 ? 'bg-amber-400' : 'bg-red-500'}`}
+                  style={{ width: `${dvrPosition}%` }}
+                />
+              </div>
+              <div
+                className={`absolute w-3 h-3 rounded-full -translate-x-1/2 shadow pointer-events-none scale-0 group-hover/seek:scale-100 transition-transform ${
+                  dvrPosition < 100 ? 'bg-amber-400' : 'bg-red-500'
+                }`}
+                style={{ left: `${dvrPosition}%` }}
+              />
               <input
                 type="range"
                 min={0}
                 max={100}
                 value={dvrPosition}
                 onChange={(e) => setDvrPosition(Number(e.target.value))}
-                className="w-full h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer accent-red-500"
+                aria-label="Tua lại buổi phát trực tiếp"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               />
-              {dvrPosition < 100 ? (
-                <button
-                  onClick={() => setDvrPosition(100)}
-                  className="px-2 py-0.5 rounded bg-amber-500 text-slate-950 text-[10px] font-extrabold whitespace-nowrap cursor-pointer"
-                >
-                  ⏪ Đang tua (-{100 - dvrPosition}p) • Bấm về LIVE
-                </button>
-              ) : (
-                <span className="text-[10px] font-extrabold text-red-400 whitespace-nowrap">
-                  ● ĐỒNG BỘ TRỰC TIẾP
-                </span>
-              )}
             </div>
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between gap-3 mt-1">
+              <div className="flex items-center gap-1 min-w-0">
                 <button
                   onClick={() => setIsPlaying(!isPlaying)}
-                  className="text-white hover:text-violet-300 transition-colors cursor-pointer"
+                  className="p-1.5 rounded-lg text-white hover:bg-white/15 transition-colors cursor-pointer"
+                  title={isPlaying ? 'Tạm dừng' : 'Phát'}
                 >
                   {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
                 </button>
                 <button
                   onClick={() => setIsMuted(!isMuted)}
-                  className="text-white hover:text-violet-300 transition-colors cursor-pointer"
+                  className="p-1.5 rounded-lg text-white hover:bg-white/15 transition-colors cursor-pointer"
+                  title={isMuted ? 'Bật tiếng' : 'Tắt tiếng'}
                 >
                   {isMuted ? (
                     <VolumeX className="w-5 h-5 text-red-400" />
@@ -702,20 +631,38 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
                     <Volume2 className="w-5 h-5" />
                   )}
                 </button>
-                <span className="text-xs text-zinc-300 font-medium hidden sm:inline tabular-nums">
-                  {channel.bitrate} • {channel.fps} FPS
+
+                {dvrPosition < 100 ? (
+                  <button
+                    onClick={() => setDvrPosition(100)}
+                    className="ml-1.5 px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-[11px] font-bold text-zinc-200 whitespace-nowrap flex items-center gap-1.5 cursor-pointer"
+                    title="Quay về điểm phát trực tiếp"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
+                    -{100 - dvrPosition} phút · Về LIVE
+                  </button>
+                ) : (
+                  <span className="ml-1.5 px-2 py-1 text-[11px] font-extrabold tracking-wide text-white whitespace-nowrap flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                    TRỰC TIẾP
+                  </span>
+                )}
+
+                <span className="hidden md:inline ml-2 pl-3 border-l border-white/15 text-[11px] text-zinc-400 tabular-nums whitespace-nowrap">
+                  {channel.bitrate} · {channel.fps} FPS
                 </span>
               </div>
 
               {/* Right Player Controls: Quality Selector, Theater, PiP */}
-              <div className="flex items-center gap-2 relative">
+              <div className="flex items-center gap-1 shrink-0">
                 <div className="relative">
                   <button
                     onClick={() => setShowQualityMenu(!showQualityMenu)}
-                    className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold text-white flex items-center gap-1.5 cursor-pointer"
+                    className="px-2.5 py-1.5 rounded-lg hover:bg-white/15 text-xs font-bold text-white flex items-center gap-1.5 cursor-pointer"
+                    title="Chất lượng video"
                   >
-                    <Settings className="w-3.5 h-3.5" />
-                    <span>{quality}</span>
+                    <Settings className="w-4 h-4" />
+                    <span className="hidden sm:inline">{quality}</span>
                   </button>
                   {showQualityMenu && (
                     <div className="absolute bottom-9 right-0 w-44 bg-[#181822] border border-white/15 rounded-xl p-1.5 shadow-2xl z-40">
@@ -739,6 +686,29 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
                     </div>
                   )}
                 </div>
+
+                <button
+                  onClick={onEnablePiP}
+                  className="p-1.5 rounded-lg text-white hover:bg-white/15 transition-colors cursor-pointer"
+                  title="Thu nhỏ (PiP) — thu video về góc phải và quay lại Trang chủ"
+                >
+                  <PictureInPicture2 className="w-4.5 h-4.5" />
+                </button>
+
+                <button
+                  onClick={() => setTheaterMode(!theaterMode)}
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                    theaterMode ? 'bg-white/15 text-violet-300' : 'text-white hover:bg-white/15'
+                  }`}
+                  title={theaterMode ? 'Thoát chế độ rạp chiếu phim' : 'Chế độ rạp chiếu phim — ẩn thanh bên để mở rộng video'}
+                  aria-pressed={theaterMode}
+                >
+                  {theaterMode ? (
+                    <Minimize2 className="w-4.5 h-4.5" />
+                  ) : (
+                    <Maximize2 className="w-4.5 h-4.5" />
+                  )}
+                </button>
               </div>
             </div>
           </div>
@@ -812,44 +782,50 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
         </div>
 
         {/* 2. INTERACTIVE GIFT DOCK (Virtual Gifting Bar right under Video) */}
-        <div className="bg-[#15151F] border-b border-white/8 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
-            <span className="text-xs font-extrabold text-zinc-300 flex items-center gap-1.5 mr-1 shrink-0">
-              <Gift className="w-4 h-4 text-rose-400" />
-              <span>Quà Tặng:</span>
-            </span>
+        <div className="bg-[#15151F] border-b border-white/8 px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-3">
+          <span className="text-xs font-extrabold text-zinc-300 flex items-center gap-1.5 shrink-0">
+            <Gift className="w-4 h-4 text-rose-400" />
+            <span>Quà Tặng</span>
+          </span>
+
+          <div className="flex-1 min-w-60 flex items-stretch gap-2 overflow-x-auto scroll-subtle pb-1 -mb-1">
             {VIRTUAL_GIFTS.map((gift) => {
               const selected = selectedGift.id === gift.id;
               return (
                 <button
                   key={gift.id}
                   onClick={() => setSelectedGift(gift)}
-                  className={`px-3 py-1.5 rounded-xl border text-left transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
+                  title={`${gift.name} — ${gift.price} Xu`}
+                  aria-pressed={selected}
+                  className={`w-24 shrink-0 px-2 pt-2 pb-1.5 rounded-xl border flex flex-col items-center gap-0.5 transition-all cursor-pointer ${
                     selected
-                      ? 'bg-white/12 border-amber-400 shadow-md scale-[1.02]'
-                      : 'bg-[#1C1C28] border-white/8 hover:bg-white/8'
+                      ? 'bg-amber-400/10 border-amber-400/70 ring-1 ring-amber-400/30'
+                      : 'bg-[#1C1C28] border-white/8 hover:border-white/20 hover:bg-white/6'
                   }`}
                 >
-                  <span className="text-lg">{gift.emoji}</span>
-                  <div>
-                    <p className="text-[11px] font-bold text-white leading-tight">{gift.name}</p>
-                    <p className="text-[10px] font-bold text-amber-400 tabular-nums">
-                      💎 {gift.price} Xu
-                    </p>
-                  </div>
+                  <span className={`text-2xl leading-none mb-1 transition-transform ${selected ? 'scale-110' : ''}`}>
+                    {gift.emoji}
+                  </span>
+                  <span className="w-full text-[11px] font-bold text-white text-center truncate">
+                    {gift.name}
+                  </span>
+                  <span className="text-[10px] font-bold text-amber-400 tabular-nums">
+                    💎 {gift.price.toLocaleString('vi-VN')}
+                  </span>
                 </button>
               );
             })}
           </div>
 
           {/* Multiplier & Send Gift CTA */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 ml-auto">
             <div className="flex items-center bg-[#1C1C28] border border-white/10 rounded-xl p-1">
               {[1, 10, 66, 99].map((mult) => (
                 <button
                   key={mult}
                   onClick={() => setGiftQty(mult)}
-                  className={`px-2 py-1 rounded-lg text-xs font-extrabold tabular-nums transition-colors cursor-pointer ${
+                  aria-pressed={giftQty === mult}
+                  className={`min-w-9 px-2 py-1.5 rounded-lg text-xs font-extrabold tabular-nums transition-colors cursor-pointer ${
                     giftQty === mult
                       ? 'bg-amber-400 text-slate-950'
                       : 'text-zinc-400 hover:text-white'
@@ -862,11 +838,11 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
 
             <button
               onClick={handleSendGift}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500 text-slate-950 font-black text-xs shadow-lg hover:scale-105 transition-transform flex items-center gap-1.5 cursor-pointer"
+              className="h-9.5 px-4 rounded-xl bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500 text-slate-950 font-black text-xs shadow-lg shadow-orange-900/30 hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
             >
               <Sparkles className="w-4 h-4" />
               <span>
-                Tặng ({(selectedGift.price * giftQty).toLocaleString('vi-VN')} Xu)
+                Tặng · {(selectedGift.price * giftQty).toLocaleString('vi-VN')} Xu
               </span>
             </button>
           </div>
@@ -953,36 +929,56 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
 
           {/* Info Cards under Stream */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-4 rounded-2xl bg-[#15151E] border border-white/8 space-y-2">
-              <h3 className="text-xs font-extrabold uppercase tracking-wider text-zinc-400">
+            <div className="p-4 rounded-2xl bg-[#15151E] border border-white/8">
+              <h3 className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider text-zinc-400 mb-3">
+                <span className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400">
+                  <Info className="w-3.5 h-3.5" />
+                </span>
                 Giới Thiệu Kênh
               </h3>
               <p className="text-xs text-zinc-300 leading-relaxed">{channel.bio}</p>
             </div>
 
-            <div className="p-4 rounded-2xl bg-[#15151E] border border-white/8 space-y-2">
-              <h3 className="text-xs font-extrabold uppercase tracking-wider text-zinc-400">
+            <div className="p-4 rounded-2xl bg-[#15151E] border border-white/8">
+              <h3 className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider text-zinc-400 mb-3">
+                <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
+                  <Crown className="w-3.5 h-3.5" />
+                </span>
                 Đặc Quyền Hội Viên (Sub)
               </h3>
-              <ul className="text-xs text-zinc-300 space-y-1">
-                <li>• Huy hiệu VIP lấp lánh trước tên trong khung Chat</li>
-                <li>• Mở khóa 25 bộ Emote độc quyền của kênh</li>
-                <li>• Xem livestream 1080p60 không quảng cáo</li>
+              <ul className="text-xs text-zinc-300 space-y-2">
+                {[
+                  'Huy hiệu VIP lấp lánh trước tên trong khung Chat',
+                  'Mở khóa 25 bộ Emote độc quyền của kênh',
+                  'Xem livestream 1080p60 không quảng cáo',
+                ].map((perk) => (
+                  <li key={perk} className="flex items-start gap-2 leading-relaxed">
+                    <Check className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                    <span>{perk}</span>
+                  </li>
+                ))}
               </ul>
             </div>
 
-            <div className="p-4 rounded-2xl bg-[#15151E] border border-white/8 space-y-2">
-              <h3 className="text-xs font-extrabold uppercase tracking-wider text-zinc-400">
+            <div className="p-4 rounded-2xl bg-[#15151E] border border-white/8">
+              <h3 className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider text-zinc-400 mb-3">
+                <span className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
+                  <CalendarClock className="w-3.5 h-3.5" />
+                </span>
                 Lịch Phát Sóng Cố Định
               </h3>
-              <div className="text-xs text-zinc-300 space-y-1">
-                <p className="flex justify-between">
-                  <span>Thứ 2 – Thứ 6:</span>
-                  <strong className="text-emerald-400">21:30 – 01:00</strong>
+              <div className="text-xs text-zinc-300 divide-y divide-white/6">
+                <p className="flex items-center justify-between gap-3 pb-2">
+                  <span>Thứ 2 – Thứ 6</span>
+                  <strong className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 tabular-nums">
+                    21:30 – 01:00
+                  </strong>
                 </p>
-                <p className="flex justify-between">
-                  <span>Thứ 7 (Giải đấu / PK):</span>
-                  <strong className="text-amber-400">20:00 – 02:00</strong>
+                <p className="flex items-center justify-between gap-3 pt-2">
+                  <span>Thứ 7 (Giải đấu / PK)</span>
+                  <strong className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 tabular-nums">
+                    20:00 – 02:00
+                  </strong>
                 </p>
               </div>
             </div>

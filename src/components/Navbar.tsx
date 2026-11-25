@@ -1,21 +1,9 @@
-import React, { useState } from 'react';
-import {
-  Radio,
-  Search,
-  Compass,
-  PlaySquare,
-  Video,
-  UserCheck,
-  Bell,
-  Sparkles,
-  Palette,
-  Flame,
-  ShoppingBag,
-  Swords,
-} from 'lucide-react';
+import React, { useCallback, useState } from 'react';
+import { Radio, Search, Bell, Sparkles, Flame, ShoppingBag, Swords } from 'lucide-react';
 import { STREAM_CHANNELS, type StreamChannel } from '../data/mockData';
+import { SettingsMenu, type Language } from './SettingsMenu';
 
-export type ActiveTab = 'home' | 'watch' | 'studio' | 'channel' | 'wallet';
+export type ActiveTab = 'home' | 'watch' | 'studio' | 'channel' | 'wallet' | 'account';
 export type BrandTheme = 'violet' | 'kick' | 'coral';
 
 interface NavbarProps {
@@ -26,6 +14,9 @@ interface NavbarProps {
   coins: number;
   onSelectChannel: (channel: StreamChannel) => void;
   cartCount: number;
+  userAvatar: string;
+  language: Language;
+  setLanguage: (lang: Language) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -36,10 +27,19 @@ export const Navbar: React.FC<NavbarProps> = ({
   coins,
   onSelectChannel,
   cartCount,
+  userAvatar,
+  language,
+  setLanguage,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
+  // Only one header dropdown open at a time
+  const [openMenu, setOpenMenu] = useState<'notifications' | 'settings' | null>(null);
+  const showNotifications = openMenu === 'notifications';
+  const handleSettingsOpenChange = useCallback(
+    (open: boolean) => setOpenMenu((prev) => (open ? 'settings' : prev === 'settings' ? null : prev)),
+    []
+  );
 
   const filteredChannels = STREAM_CHANNELS.filter(
     (c) =>
@@ -54,13 +54,6 @@ export const Navbar: React.FC<NavbarProps> = ({
       : brandTheme === 'kick'
       ? 'from-emerald-500 to-lime-400'
       : 'from-rose-500 to-amber-500';
-
-  const activeBtnStyle =
-    brandTheme === 'violet'
-      ? 'bg-violet-500/15 text-violet-300 border-violet-500/40'
-      : brandTheme === 'kick'
-      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
-      : 'bg-rose-500/15 text-rose-300 border-rose-500/40';
 
   return (
     <header className="sticky top-0 z-50 h-16 w-full bg-[#121218]/90 backdrop-blur-xl border-b border-white/8 px-4 lg:px-6 flex items-center justify-between gap-3">
@@ -89,57 +82,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             </span>
           </div>
         </button>
-
-        <nav className="hidden md:flex items-center gap-1.5">
-          <button
-            onClick={() => setActiveTab('home')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all cursor-pointer ${
-              activeTab === 'home'
-                ? activeBtnStyle
-                : 'border-transparent text-zinc-400 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Compass className="w-4 h-4" />
-            <span>Khám phá</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('watch')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all cursor-pointer ${
-              activeTab === 'watch'
-                ? activeBtnStyle
-                : 'border-transparent text-zinc-400 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <PlaySquare className="w-4 h-4" />
-            <span>Phòng Xem Live</span>
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-          </button>
-
-          <button
-            onClick={() => setActiveTab('studio')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all cursor-pointer ${
-              activeTab === 'studio'
-                ? activeBtnStyle
-                : 'border-transparent text-zinc-400 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Video className="w-4 h-4" />
-            <span>Creator Studio</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('channel')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all cursor-pointer ${
-              activeTab === 'channel'
-                ? activeBtnStyle
-                : 'border-transparent text-zinc-400 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <UserCheck className="w-4 h-4" />
-            <span>Kênh Cá Nhân</span>
-          </button>
-        </nav>
       </div>
 
       {/* Center: Live Search Bar with Instant Suggestions */}
@@ -222,51 +164,8 @@ export const Navbar: React.FC<NavbarProps> = ({
         )}
       </div>
 
-      {/* Right: Theme Switcher, Wallet, Notifications, Go Live CTA */}
+      {/* Right: Wallet, Notifications, Settings, Account */}
       <div className="flex items-center gap-2.5">
-        {/* Brand Accent Theme Switcher */}
-        <div className="hidden xl:flex items-center gap-1 bg-[#1A1A24] border border-white/8 rounded-xl p-1">
-          <span className="text-[11px] text-zinc-400 px-2 flex items-center gap-1">
-            <Palette className="w-3.5 h-3.5" /> Theme:
-          </span>
-          <button
-            onClick={() => setBrandTheme('violet')}
-            title="Phong cách Twitch (Electric Violet)"
-            className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer flex items-center gap-1 ${
-              brandTheme === 'violet'
-                ? 'bg-violet-600 text-white shadow'
-                : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            <span className="w-2 h-2 rounded-full bg-violet-400" />
-            Tím Neon
-          </button>
-          <button
-            onClick={() => setBrandTheme('kick')}
-            title="Phong cách Kick (Cyber Green)"
-            className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer flex items-center gap-1 ${
-              brandTheme === 'kick'
-                ? 'bg-emerald-600 text-white shadow'
-                : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            Xanh Kick
-          </button>
-          <button
-            onClick={() => setBrandTheme('coral')}
-            title="Phong cách TikTok/YouTube (Coral Red)"
-            className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer flex items-center gap-1 ${
-              brandTheme === 'coral'
-                ? 'bg-rose-600 text-white shadow'
-                : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            <span className="w-2 h-2 rounded-full bg-rose-400" />
-            Đỏ Coral
-          </button>
-        </div>
-
         {/* Wallet / Coins Balance */}
         <button
           onClick={() => setActiveTab('wallet')}
@@ -284,8 +183,9 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Notification Bell */}
         <div className="relative">
           <button
-            onClick={() => setShowNotifications(!showNotifications)}
+            onClick={() => setOpenMenu(showNotifications ? null : 'notifications')}
             className="relative p-2 rounded-xl bg-[#1A1A24] hover:bg-white/10 border border-white/8 text-zinc-300 cursor-pointer"
+            title="Thông báo"
           >
             <Bell className="w-4 h-4" />
             <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-[10px] font-bold text-white flex items-center justify-center">
@@ -298,7 +198,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <div className="flex items-center justify-between pb-2 border-b border-white/8">
                 <span className="text-xs font-bold text-white">Thông báo mới</span>
                 <button
-                  onClick={() => setShowNotifications(false)}
+                  onClick={() => setOpenMenu(null)}
                   className="text-[11px] text-zinc-400 hover:text-white"
                 >
                   Đóng
@@ -324,26 +224,28 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
         </div>
 
-        {/* Go Live Button */}
-        <button
-          onClick={() => setActiveTab('studio')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r ${themeBadgeColor} shadow-lg hover:opacity-95 transition-all flex items-center gap-1.5 cursor-pointer`}
-        >
-          <Radio className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Phát Trực Tiếp</span>
-        </button>
+        {/* Settings: theme + language */}
+        <SettingsMenu
+          open={openMenu === 'settings'}
+          onOpenChange={handleSettingsOpenChange}
+          brandTheme={brandTheme}
+          setBrandTheme={setBrandTheme}
+          language={language}
+          setLanguage={setLanguage}
+        />
 
         {/* User Avatar */}
         <button
-          onClick={() => setActiveTab('channel')}
-          className="w-9 h-9 rounded-xl overflow-hidden border-2 border-white/15 hover:border-white/40 transition-all cursor-pointer shrink-0"
-          title="Kênh cá nhân của bạn"
+          onClick={() => setActiveTab('account')}
+          className={`w-9 h-9 rounded-xl overflow-hidden border-2 transition-all cursor-pointer shrink-0 ${
+            activeTab === 'account'
+              ? 'border-(--brand-light) ring-2 ring-(--brand-soft)'
+              : 'border-white/15 hover:border-white/40'
+          }`}
+          title="Trung tâm cá nhân"
+          aria-current={activeTab === 'account' ? 'page' : undefined}
         >
-          <img
-            src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80"
-            alt="User Avatar"
-            className="w-full h-full object-cover"
-          />
+          <img src={userAvatar} alt="Trung tâm cá nhân" className="w-full h-full object-cover" />
         </button>
       </div>
     </header>

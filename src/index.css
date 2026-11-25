@@ -59,6 +59,35 @@ body {
   background: #3f3f52;
 }
 
+/* Hide scrollbar entirely (touch-scrollable strips like segmented controls) */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Thin scrollbar that only appears on hover (horizontal item rails) */
+.scroll-subtle {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.scroll-subtle:hover {
+  scrollbar-color: #2a2a36 transparent;
+}
+.scroll-subtle::-webkit-scrollbar {
+  height: 4px;
+}
+.scroll-subtle::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-subtle::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+.scroll-subtle:hover::-webkit-scrollbar-thumb {
+  background: #2a2a36;
+}
+
 @keyframes floatUpHeart {
   0% {
     transform: translateY(0) scale(0.6) rotate(0deg);

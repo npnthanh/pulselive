@@ -13,24 +13,57 @@ import { Navbar, type ActiveTab, type BrandTheme } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { HomeView } from './components/HomeView';
 import { WatchRoomView } from './components/WatchRoomView';
-import { CreatorStudioView } from './components/CreatorStudioView';
+import { StreamerStudioView } from './components/studio/StreamerStudioView';
+import { useStudioState } from './components/studio/useStudioState';
 import { ChannelProfileView } from './components/ChannelProfileView';
 import { WalletView } from './components/WalletView';
+import { AccountView } from './components/AccountView';
 import {
   STREAM_CHANNELS,
   type StreamChannel,
   LIVE_PRODUCTS,
   type LiveProduct,
 } from './data/mockData';
+import { INITIAL_USER_PROFILE, type UserProfile } from './data/accountData';
+import type { Language } from './components/SettingsMenu';
+
+const THEME_KEY = 'pulselive.theme';
+const LANGUAGE_KEY = 'pulselive.language';
+
+/** Read a persisted preference; falls back when storage is unavailable or the value is unknown. */
+function readSetting<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  try {
+    const value = localStorage.getItem(key);
+    return allowed.includes(value as T) ? (value as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeSetting(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* storage unavailable (private mode, blocked) — preference just won't persist */
+  }
+}
 
 export function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('home');
-  const [brandTheme, setBrandTheme] = useState<BrandTheme>('violet');
+  const [brandTheme, setBrandTheme] = useState<BrandTheme>(() =>
+    readSetting(THEME_KEY, ['violet', 'kick', 'coral'] as const, 'violet')
+  );
+  const [language, setLanguage] = useState<Language>(() =>
+    readSetting(LANGUAGE_KEY, ['vi', 'en'] as const, 'vi')
+  );
   const [selectedChannel, setSelectedChannel] = useState<StreamChannel>(STREAM_CHANNELS[0]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [theaterMode, setTheaterMode] = useState(false);
   const [pipActive, setPipActive] = useState(false);
   const [coins, setCoins] = useState<number>(2450);
+  const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_USER_PROFILE);
+  // Streamer area state lives here so a live stream keeps running while browsing other pages
+  const studio = useStudioState(userProfile);
   const [followedIds, setFollowedIds] = useState<string[]>([
     'mixi-gaming',
     'linh-idol-pk',
@@ -43,7 +76,13 @@ export function App() {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', brandTheme);
+    writeSetting(THEME_KEY, brandTheme);
   }, [brandTheme]);
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+    writeSetting(LANGUAGE_KEY, language);
+  }, [language]);
 
   const toggleFollow = (id: string) => {
     setFollowedIds((prev) =>
@@ -85,11 +124,14 @@ export function App() {
           setPipActive(false);
         }}
         cartCount={cartItems.reduce((acc, item) => acc + item.qty, 0)}
+        userAvatar={userProfile.avatar}
+        language={language}
+        setLanguage={setLanguage}
       />
 
       {/* Main Content Layout: Collapsible Left Sidebar + Active View */}
-      <div className="flex-1 flex overflow-hidden pb-14 md:pb-0">
-        {!(activeTab === 'watch' && theaterMode) && (
+      <div className="flex-1 flex overflow-clip pb-14 md:pb-0">
+        {activeTab !== 'account' && activeTab !== 'studio' && !(activeTab === 'watch' && theaterMode) && (
           <Sidebar
             collapsed={sidebarCollapsed}
             setCollapsed={setSidebarCollapsed}
@@ -131,7 +173,7 @@ export function App() {
           />
         )}
 
-        {activeTab === 'studio' && <CreatorStudioView brandTheme={brandTheme} />}
+        {activeTab === 'studio' && <StreamerStudioView studio={studio} setActiveTab={setActiveTab} />}
 
         {activeTab === 'channel' && (
           <ChannelProfileView
@@ -149,6 +191,21 @@ export function App() {
             setCoins={setCoins}
             cartItems={cartItems}
             onClearCart={() => setCartItems([])}
+            setActiveTab={setActiveTab}
+          />
+        )}
+
+        {activeTab === 'account' && (
+          <AccountView
+            profile={userProfile}
+            onSaveProfile={setUserProfile}
+            coins={coins}
+            followedIds={followedIds}
+            toggleFollow={toggleFollow}
+            onSelectChannel={(ch) => {
+              setSelectedChannel(ch);
+              setPipActive(false);
+            }}
             setActiveTab={setActiveTab}
           />
         )}
