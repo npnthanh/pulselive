@@ -6,6 +6,7 @@ import { Field, SectionTitle, Toggle } from './studioUi';
 import { cardCls, inputCls, btnGhostCls, btnPrimaryCls } from './styles';
 import { formatNumber } from './format';
 import { STUDIO_CATEGORIES, TOTAL_FOLLOWER_COUNT } from '../../data/studioData';
+import { Select } from '../ui/Select';
 
 type Errors = Partial<Record<'displayName' | 'handle' | 'bio', string>>;
 
@@ -148,17 +149,12 @@ export const StudioCustomize: React.FC<{ studio: StudioState }> = ({ studio }) =
 
           <div className={`${cardCls} p-5`}>
             <CardHeader icon={<Tag className="w-4 h-4" />} title="Danh mục mặc định" text="Tự điền khi bạn thiết lập buổi live mới." />
-            <select
+            <Select
+              ariaLabel="Danh mục mặc định"
               value={draft.defaultCategory}
-              onChange={(e) => set('defaultCategory', e.target.value)}
-              className={`${inputCls} [color-scheme:dark] cursor-pointer`}
-            >
-              {STUDIO_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+              onChange={(c) => set('defaultCategory', c)}
+              options={STUDIO_CATEGORIES.map((c) => ({ value: c, label: c }))}
+            />
           </div>
         </div>
 

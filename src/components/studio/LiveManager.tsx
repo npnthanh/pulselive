@@ -28,13 +28,15 @@ import {
   Coins,
   UserPlus,
   Sparkles,
+  Wrench,
 } from 'lucide-react';
 import type { FeedKind, StudioState } from './useStudioState';
 import { useNow } from './useStudioState';
 import { Modal, Field } from './studioUi';
 import { StreamInfoModal } from './StreamInfoModal';
 import { inputCls, btnGhostCls, btnPrimaryCls, btnDangerCls } from './styles';
-import { formatClock, formatNumber, formatTime } from './format';
+import { formatClock, formatCompact, formatNumber, formatTime } from './format';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { STREAM_KEY, STREAM_SERVER_URL } from '../../data/studioData';
 
 interface LiveManagerProps {
@@ -61,6 +63,10 @@ export const LiveManager: React.FC<LiveManagerProps> = ({ studio, onRequestGoLiv
   const now = useNow(isLive);
   const [modal, setModal] = useState<'info' | 'prediction' | 'poll' | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  // Phones/tablets get a single-screen console (preview on top, chat/feed/tools tabs below)
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
+  const [mobileTab, setMobileTab] = useState<'chat' | 'feed' | 'tools'>('chat');
+  const [lastSeenChatId, setLastSeenChatId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!toast) return;
@@ -121,16 +127,192 @@ export const LiveManager: React.FC<LiveManagerProps> = ({ studio, onRequestGoLiv
 
   const elapsed = isLive && startedAt !== null ? (now - startedAt) / 1000 : 0;
 
+  const renderActions = (gridClass: string) => (
+    <div className={gridClass}>
+      {actions.map((a) => {
+        const blocked = (a.needsLive && !isLive) || !!a.disabledReason;
+        const reason = a.disabledReason ?? (a.needsLive && !isLive ? 'Cần bắt đầu live' : undefined);
+        return (
+          <button
+            key={a.id}
+            onClick={a.onClick}
+            disabled={blocked}
+            aria-pressed={a.active !== undefined ? a.active : undefined}
+            title={reason ?? a.label}
+            className={`relative min-h-24 p-3 rounded-xl border text-left flex flex-col justify-between gap-3 transition-colors cursor-pointer disabled:cursor-not-allowed ${
+              a.active
+                ? 'bg-(--brand-soft) border-(--brand)/50 text-white'
+                : 'bg-white/[0.04] border-white/8 text-zinc-300 hover:bg-white/8 hover:text-white disabled:opacity-40 disabled:hover:bg-white/[0.04]'
+            }`}
+          >
+            <a.icon className={`w-5 h-5 ${a.active ? 'text-(--brand-light)' : ''}`} />
+            <span className="text-[11px] font-semibold leading-snug">{a.label}</span>
+            {a.active && (
+              <span className="absolute top-2 right-2 text-[9px] font-extrabold uppercase text-(--brand-light)">Bật</span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const liveStats = [
+    { label: 'Người xem hiện tại', short: 'Đang xem', value: stats.viewers, icon: Users },
+    { label: 'Xu nhận được', short: 'Xu', value: stats.coins, icon: Coins },
+    { label: 'Đăng ký mới', short: 'Đăng ký', value: stats.newSubs, icon: Star },
+    { label: 'Người theo dõi mới', short: 'Theo dõi', value: stats.newFollowers, icon: UserPlus },
+  ];
+
+  // Unread chat badge while the streamer looks at another tab
+  const lastSeenIndex = lastSeenChatId ? studio.chat.findIndex((m) => m.id === lastSeenChatId) : -1;
+  const unreadChat =
+    mobileTab === 'chat' || lastSeenChatId === null
+      ? 0
+      : lastSeenIndex === -1
+      ? studio.chat.length
+      : studio.chat.length - 1 - lastSeenIndex;
+  const switchMobileTab = (tab: 'chat' | 'feed' | 'tools') => {
+    if (mobileTab === 'chat' && tab !== 'chat') setLastSeenChatId(studio.chat.at(-1)?.id ?? '');
+    setMobileTab(tab);
+  };
+
+  const mobileConsole = (
+    <div className="flex-1 min-h-0 flex flex-col">
+      {/* Own stream preview with live stats on top of it */}
+      <div className="relative w-full aspect-video max-h-[34dvh] shrink-0 bg-[#0B0B0F] overflow-hidden">
+        {isLive ? (
+          <>
+            <img src={studio.settings.banner} alt="Màn hình đang phát" className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-black/40" />
+            <div className="absolute bottom-2 left-2 right-2 grid grid-cols-4 gap-1.5">
+              {liveStats.map((s) => (
+                <div key={s.label} title={s.label} className="px-1 py-1 rounded-lg bg-black/65 backdrop-blur-sm text-center">
+                  <p className="text-sm font-extrabold text-white tabular-nums leading-tight">{formatCompact(s.value)}</p>
+                  <p className="text-[9px] text-zinc-300 inline-flex items-center gap-0.5 max-w-full">
+                    <s.icon className="w-2.5 h-2.5 shrink-0" />
+                    <span className="truncate">{s.short}</span>
+                  </p>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
+            <span className="p-2.5 rounded-2xl bg-white/5 text-zinc-500">
+              <Video className="w-6 h-6" />
+            </span>
+            <p className="mt-2 text-sm font-bold text-zinc-200">Bạn đang offline</p>
+            <p className="mt-0.5 text-[11px] text-zinc-500 max-w-xs">
+              Kết nối OBS bằng mã stream ở tab Công cụ, rồi bấm Bắt đầu live.
+            </p>
+          </div>
+        )}
+        <div className="absolute top-2 left-2 flex items-center gap-1.5">
+          <span
+            className={`px-2 py-0.5 rounded-md text-[11px] font-black ${
+              isLive ? 'bg-red-600 text-white' : 'bg-black/60 text-zinc-300'
+            }`}
+          >
+            {isLive ? 'LIVE' : 'OFFLINE'}
+          </span>
+          {isLive && (
+            <span className="px-2 py-0.5 rounded-md bg-black/60 text-[11px] font-bold text-white tabular-nums">
+              {formatClock(elapsed)}
+            </span>
+          )}
+        </div>
+        {isLive && (
+          <span className="absolute top-2 right-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/60 text-[11px] font-semibold text-emerald-400">
+            <Wifi className="w-3 h-3" /> 6.000 kbps
+          </span>
+        )}
+      </div>
+
+      {/* Stream title (tap to edit) + go live / end */}
+      <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-white/8 bg-[#13131A]">
+        <button onClick={() => setModal('info')} className="min-w-0 flex-1 text-left cursor-pointer">
+          <p className="text-xs font-bold text-white truncate">{streamInfo.title}</p>
+          <p className="text-[10px] text-zinc-500 flex items-center gap-1 min-w-0">
+            <span className="truncate">{streamInfo.category}</span>
+            <span className="shrink-0 inline-flex items-center gap-0.5 text-(--brand-light)">
+              · <Pencil className="w-2.5 h-2.5" /> Sửa
+            </span>
+          </p>
+        </button>
+        {isLive ? (
+          <button onClick={onRequestEndLive} className={`${btnDangerCls} shrink-0`}>
+            <Square className="w-3.5 h-3.5 fill-current" /> Kết thúc
+          </button>
+        ) : (
+          <button
+            onClick={onRequestGoLive}
+            className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold text-white bg-gradient-to-r from-red-600 to-rose-500 hover:brightness-110 shadow-lg transition-all cursor-pointer"
+          >
+            <Radio className="w-3.5 h-3.5" /> Bắt đầu live
+          </button>
+        )}
+      </div>
+
+      {/* Panel tabs */}
+      <div className="shrink-0 grid grid-cols-3 border-b border-white/8 bg-[#13131A]">
+        {(
+          [
+            { id: 'chat', label: 'Chat', icon: MessageSquareText },
+            { id: 'feed', label: 'Hoạt động', icon: Heart },
+            { id: 'tools', label: 'Công cụ', icon: Wrench },
+          ] as const
+        ).map((t) => {
+          const active = mobileTab === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => switchMobileTab(t.id)}
+              aria-pressed={active}
+              className={`relative py-2.5 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer ${
+                active ? 'text-white' : 'text-zinc-500'
+              }`}
+            >
+              <t.icon className="w-4 h-4" />
+              {t.label}
+              {t.id === 'chat' && unreadChat > 0 && (
+                <span className="min-w-4 h-4 px-1 rounded-full bg-red-600 text-white text-[9px] font-black flex items-center justify-center tabular-nums">
+                  {unreadChat > 99 ? '99+' : unreadChat}
+                </span>
+              )}
+              {t.id === 'tools' && (prediction || poll) && (
+                <span className="w-1.5 h-1.5 rounded-full bg-(--brand-light)" title="Đang có dự đoán / bình chọn" />
+              )}
+              {active && <span className="absolute bottom-0 inset-x-6 h-0.5 rounded-full bg-(--brand)" />}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex-1 min-h-0">
+        {mobileTab === 'chat' && <StreamerChat studio={studio} fill />}
+        {mobileTab === 'feed' && <MiniFeed studio={studio} now={now} fill />}
+        {mobileTab === 'tools' && (
+          <div className="h-full overflow-y-auto p-3 space-y-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+            {prediction && <PredictionPanel studio={studio} now={now} />}
+            {poll && <PollPanel studio={studio} now={now} />}
+            <div>
+              <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-zinc-500">Thao tác nhanh</h3>
+              {renderActions('grid grid-cols-3 sm:grid-cols-6 gap-2')}
+            </div>
+            <StreamKeyCard />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
-    <div className="flex flex-col lg:h-[calc(100vh-4rem)] min-h-0">
+    <div className="flex flex-col lg:h-[calc(100vh-4rem)] min-h-0 max-lg:flex-1">
+      {isDesktop ? (
+      <>
       {/* Top live stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-white/8 border-b border-white/8 shrink-0">
-        {[
-          { label: 'Người xem hiện tại', value: stats.viewers, icon: Users },
-          { label: 'Xu nhận được', value: stats.coins, icon: Coins },
-          { label: 'Đăng ký mới', value: stats.newSubs, icon: Star },
-          { label: 'Người theo dõi mới', value: stats.newFollowers, icon: UserPlus },
-        ].map((s) => (
+        {liveStats.map((s) => (
           <div key={s.label} className="py-3 px-4 text-center bg-[#13131A]">
             <p className="text-2xl font-extrabold text-white">{formatNumber(s.value)}</p>
             <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-zinc-400">
@@ -146,32 +328,7 @@ export const LiveManager: React.FC<LiveManagerProps> = ({ studio, onRequestGoLiv
           <div className={panelHeader}>
             <h2 className={panelTitle}>Thao tác nhanh</h2>
           </div>
-          <div className="p-3 grid grid-cols-3 sm:grid-cols-6 lg:grid-cols-2 gap-2 overflow-y-auto">
-            {actions.map((a) => {
-              const blocked = (a.needsLive && !isLive) || !!a.disabledReason;
-              const reason = a.disabledReason ?? (a.needsLive && !isLive ? 'Cần bắt đầu live' : undefined);
-              return (
-                <button
-                  key={a.id}
-                  onClick={a.onClick}
-                  disabled={blocked}
-                  aria-pressed={a.active !== undefined ? a.active : undefined}
-                  title={reason ?? a.label}
-                  className={`relative min-h-24 p-3 rounded-xl border text-left flex flex-col justify-between gap-3 transition-colors cursor-pointer disabled:cursor-not-allowed ${
-                    a.active
-                      ? 'bg-(--brand-soft) border-(--brand)/50 text-white'
-                      : 'bg-white/[0.04] border-white/8 text-zinc-300 hover:bg-white/8 hover:text-white disabled:opacity-40 disabled:hover:bg-white/[0.04]'
-                  }`}
-                >
-                  <a.icon className={`w-5 h-5 ${a.active ? 'text-(--brand-light)' : ''}`} />
-                  <span className="text-[11px] font-semibold leading-snug">{a.label}</span>
-                  {a.active && (
-                    <span className="absolute top-2 right-2 text-[9px] font-extrabold uppercase text-(--brand-light)">Bật</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          {renderActions('p-3 grid grid-cols-3 sm:grid-cols-6 lg:grid-cols-2 gap-2 overflow-y-auto')}
         </section>
 
         {/* CENTER: preview + stream key + interactions */}
@@ -281,9 +438,13 @@ export const LiveManager: React.FC<LiveManagerProps> = ({ studio, onRequestGoLiv
           <StreamerChat studio={studio} />
         </section>
       </div>
+      </>
+      ) : (
+        mobileConsole
+      )}
 
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[70] px-4 py-2.5 rounded-xl bg-[#1C1C28] border border-white/15 shadow-2xl text-xs font-semibold text-white flex items-center gap-2">
+        <div className="fixed bottom-6 max-lg:bottom-auto max-lg:top-20 left-1/2 -translate-x-1/2 z-[70] px-4 py-2.5 rounded-xl bg-[#1C1C28] border border-white/15 shadow-2xl text-xs font-semibold text-white flex items-center gap-2">
           <Check className="w-4 h-4 text-emerald-400" /> {toast}
         </div>
       )}
@@ -541,23 +702,24 @@ const FEED_ICON: Record<FeedKind, { icon: typeof Heart; cls: string; label: stri
   sub: { icon: Star, cls: 'text-violet-300 bg-violet-500/10', label: 'Hội viên' },
 };
 
-const MiniFeed: React.FC<{ studio: StudioState; now: number }> = ({ studio }) => {
+const MiniFeed: React.FC<{ studio: StudioState; now: number; fill?: boolean }> = ({ studio, fill = false }) => {
   const [filter, setFilter] = useState<FeedKind | 'all'>('all');
   const items = filter === 'all' ? studio.feed : studio.feed.filter((e) => e.kind === filter);
 
   return (
-    <div className="flex flex-col min-h-0 h-72 xl:h-auto xl:flex-[0_0_42%]">
-      <div className={panelHeader}>
-        <h2 className={panelTitle}>Mini-Feed</h2>
-        <div className="flex items-center gap-0.5">
+    <div className={`flex flex-col min-h-0 ${fill ? 'h-full' : 'h-72 xl:h-auto xl:flex-[0_0_42%]'}`}>
+      <div className={`${panelHeader} ${fill ? 'h-10' : ''}`}>
+        {/* Phone console: the tab already names this panel — the filters get the whole row */}
+        {!fill && <h2 className={panelTitle}>Mini-Feed</h2>}
+        <div className={`flex items-center gap-0.5 ${fill ? 'w-full justify-between' : ''}`}>
           {(['all', 'follow', 'gift', 'sub'] as const).map((k) => (
             <button
               key={k}
               onClick={() => setFilter(k)}
               aria-pressed={filter === k}
-              className={`px-2 py-1 rounded-md text-[10px] font-bold transition-colors cursor-pointer ${
-                filter === k ? 'bg-white/12 text-white' : 'text-zinc-500 hover:text-white'
-              }`}
+              className={`px-2 py-1 rounded-md font-bold whitespace-nowrap transition-colors cursor-pointer ${
+                fill ? 'flex-1 text-xs py-1.5' : 'text-[10px]'
+              } ${filter === k ? 'bg-white/12 text-white' : 'text-zinc-500 hover:text-white'}`}
             >
               {k === 'all' ? 'Tất cả' : FEED_ICON[k].label}
             </button>
@@ -593,7 +755,7 @@ const MiniFeed: React.FC<{ studio: StudioState; now: number }> = ({ studio }) =>
   );
 };
 
-const StreamerChat: React.FC<{ studio: StudioState }> = ({ studio }) => {
+const StreamerChat: React.FC<{ studio: StudioState; fill?: boolean }> = ({ studio, fill = false }) => {
   const { chat, isLive, slowMode, followersOnly } = studio;
   const [text, setText] = useState('');
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -612,9 +774,11 @@ const StreamerChat: React.FC<{ studio: StudioState }> = ({ studio }) => {
   };
 
   return (
-    <div className="flex flex-col min-h-0 h-96 xl:h-auto xl:flex-1 border-t border-white/8">
-      <div className={panelHeader}>
-        <h2 className={panelTitle}>Chat của tôi</h2>
+    <div className={`flex flex-col min-h-0 ${fill ? 'h-full' : 'h-96 xl:h-auto xl:flex-1 border-t border-white/8'}`}>
+      {/* Phone console: the tab already says "Chat" — only show the header when a chat mode is on */}
+      {(!fill || slowMode || followersOnly) && (
+      <div className={`${panelHeader} ${fill ? 'h-8' : ''}`}>
+        <h2 className={panelTitle}>{fill ? 'Chế độ chat' : 'Chat của tôi'}</h2>
         <div className="flex items-center gap-1">
           {slowMode && <span className="px-1.5 py-0.5 rounded bg-white/8 text-[10px] font-bold text-zinc-300">Chậm</span>}
           {followersOnly && (
@@ -622,6 +786,7 @@ const StreamerChat: React.FC<{ studio: StudioState }> = ({ studio }) => {
           )}
         </div>
       </div>
+      )}
       <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto">
         {chat.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6">
@@ -633,7 +798,7 @@ const StreamerChat: React.FC<{ studio: StudioState }> = ({ studio }) => {
         ) : (
           <ul className="p-3 space-y-1.5">
             {chat.map((m) => (
-              <li key={m.id} className="text-xs leading-relaxed">
+              <li key={m.id} className={`${fill ? 'text-[13px]' : 'text-xs'} leading-relaxed`}>
                 <span className="text-[10px] text-zinc-600 tabular-nums mr-1.5">{formatTime(m.at)}</span>
                 {m.isStreamer && (
                   <span className="inline-flex items-center gap-0.5 mr-1 px-1 rounded bg-(--brand) text-[9px] font-extrabold text-white align-middle">
@@ -647,14 +812,19 @@ const StreamerChat: React.FC<{ studio: StudioState }> = ({ studio }) => {
           </ul>
         )}
       </div>
-      <form onSubmit={send} className="p-3 flex gap-2 shrink-0">
+      <form
+        onSubmit={send}
+        className={`p-3 flex gap-2 shrink-0 ${
+          fill ? 'p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] border-t border-white/8 bg-[#161620]' : ''
+        }`}
+      >
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
           disabled={!isLive}
           maxLength={200}
           placeholder={isLive ? 'Nói chuyện chút nào!' : 'Bắt đầu live để chat với khán giả'}
-          className={`${inputCls} disabled:opacity-50`}
+          className={`${inputCls} disabled:opacity-50 ${fill ? 'text-base' : ''}`}
         />
         <button type="submit" disabled={!isLive || !text.trim()} className={`${btnPrimaryCls} px-3`} aria-label="Gửi">
           <Send className="w-4 h-4" />

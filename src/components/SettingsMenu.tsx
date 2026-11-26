@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Settings, Palette, Languages, ChevronRight, Check } from 'lucide-react';
 import type { BrandTheme } from './Navbar';
+import { useDismiss } from '../hooks/useDismiss';
 
 export type Language = 'vi' | 'en';
 
@@ -36,22 +37,8 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
   const [langOpen, setLangOpen] = useState(false);
   const currentLanguage = LANGUAGES.find((l) => l.id === language) ?? LANGUAGES[0];
 
-  // Close on outside click / Escape
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) onOpenChange(false);
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onOpenChange(false);
-    };
-    document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open, onOpenChange]);
+  // Close on outside press / Escape
+  useDismiss(open, [rootRef], () => onOpenChange(false));
 
   return (
     <div ref={rootRef} className="relative">
@@ -60,7 +47,7 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
         aria-haspopup="menu"
         aria-expanded={open}
         title="Cài đặt"
-        className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+        className={`p-1.5 sm:p-2 rounded-xl border transition-colors cursor-pointer ${
           open
             ? 'bg-white/10 border-white/20 text-white'
             : 'bg-[#1A1A24] hover:bg-white/10 border-white/8 text-zinc-300'

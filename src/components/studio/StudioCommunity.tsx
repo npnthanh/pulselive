@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, Users, UserPlus, Shield, ShieldOff, Ban, Undo2, Star, ChevronDown } from 'lucide-react';
+import { Search, Users, UserPlus, Shield, ShieldOff, Ban, Undo2, Star } from 'lucide-react';
 import type { StudioState } from './useStudioState';
 import { useNow } from './useStudioState';
 import { StatTile, SectionTitle, EmptyState } from './studioUi';
@@ -7,6 +7,7 @@ import { cardCls, inputCls } from './styles';
 import { formatCompact, formatDate, formatNumber, timeAgo } from './format';
 import { summarizePeriod } from './analytics';
 import { TOTAL_FOLLOWER_COUNT, type Follower } from '../../data/studioData';
+import { Select } from '../ui/Select';
 
 type Filter = 'all' | 'sub' | 'mod';
 type Sort = 'newest' | 'oldest' | 'coins' | 'hours';
@@ -111,21 +112,14 @@ export const StudioCommunity: React.FC<{ studio: StudioState }> = ({ studio }) =
                 </button>
               ))}
             </div>
-            <label className="relative">
-              <span className="sr-only">Sắp xếp</span>
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value as Sort)}
-                className="appearance-none bg-[#1C1C28] border border-white/10 hover:border-white/20 rounded-xl pl-3 pr-8 py-2 text-xs font-semibold text-white cursor-pointer focus:outline-none [color-scheme:dark]"
-              >
-                {SORTS.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" />
-            </label>
+            <Select
+              size="sm"
+              fullWidth={false}
+              ariaLabel="Sắp xếp"
+              value={sort}
+              onChange={setSort}
+              options={SORTS.map((s) => ({ value: s.id, label: s.label }))}
+            />
           </div>
         </div>
 

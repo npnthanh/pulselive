@@ -152,3 +152,19 @@ body {
 .live-pulse {
   animation: pulseRing 2s infinite;
 }
+
+/* Dropdowns / date picker panels (ui/Popover) */
+@keyframes popoverIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-popover-in {
+  animation: popoverIn 0.14s cubic-bezier(0.16, 1, 0.3, 1);
+}

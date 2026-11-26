@@ -3,6 +3,7 @@ import { Radio, Check, X } from 'lucide-react';
 import { Modal, Field, Toggle } from './studioUi';
 import { inputCls, btnGhostCls, btnPrimaryCls } from './styles';
 import { STUDIO_CATEGORIES } from '../../data/studioData';
+import { Select } from '../ui/Select';
 import type { StreamInfo } from './useStudioState';
 
 const MAX_TAGS = 5;
@@ -81,13 +82,11 @@ export const StreamInfoModal: React.FC<{
       </Field>
 
       <Field label="Danh mục">
-        <select value={category} onChange={(e) => setCategory(e.target.value)} className={`${inputCls} [color-scheme:dark] cursor-pointer`}>
-          {STUDIO_CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={category}
+          onChange={setCategory}
+          options={STUDIO_CATEGORIES.map((c) => ({ value: c, label: c }))}
+        />
       </Field>
 
       <Field label="Thẻ tag" hint={`Nhấn Enter để thêm · tối đa ${MAX_TAGS} thẻ`}>

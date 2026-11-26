@@ -18,7 +18,6 @@ import {
   Play,
   UserMinus,
   Compass,
-  ChevronDown,
   Cake,
   Undo2,
 } from 'lucide-react';
@@ -34,8 +33,10 @@ import {
 } from '../data/accountData';
 import type { ActiveTab } from './Navbar';
 import { AnimatedArrow } from './AnimatedArrow';
+import type { AccountSection } from '../routes';
+import { Select } from './ui/Select';
+import { DatePicker } from './ui/DatePicker';
 
-type AccountSection = 'info' | 'following' | 'coins';
 
 interface AccountViewProps {
   profile: UserProfile;
@@ -45,6 +46,9 @@ interface AccountViewProps {
   toggleFollow: (id: string) => void;
   onSelectChannel: (channel: StreamChannel) => void;
   setActiveTab: (tab: ActiveTab) => void;
+  /** Current section — from the URL (/account, /account/following, /account/coins). */
+  section: AccountSection;
+  onSectionChange: (section: AccountSection) => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -97,8 +101,9 @@ export const AccountView: React.FC<AccountViewProps> = ({
   toggleFollow,
   onSelectChannel,
   setActiveTab,
+  section,
+  onSectionChange: setSection,
 }) => {
-  const [section, setSection] = useState<AccountSection>('info');
 
   const navItems: { id: AccountSection; label: string; icon: typeof User; badge?: string }[] = [
     { id: 'info', label: 'Thông tin của tôi', icon: User },
@@ -341,12 +346,13 @@ const ProfileSection: React.FC<{ profile: UserProfile; onSave: (p: UserProfile) 
       view: <span className="text-sm font-semibold text-white tabular-nums">{formatBirthday(profile.birthday)}</span>,
       edit: (
         <div>
-          <input
-            type="date"
+          <DatePicker
             value={draft.birthday}
             max={today}
-            onChange={(e) => setDraft({ ...draft, birthday: e.target.value })}
-            className={`${inputClass} ${borderFor('birthday')} [color-scheme:dark]`}
+            onChange={(birthday) => setDraft({ ...draft, birthday })}
+            invalid={Boolean(errors.birthday)}
+            ariaLabel="Ngày sinh"
+            className="max-w-sm"
           />
           {errorText('birthday')}
         </div>
@@ -615,22 +621,14 @@ const MonthSelect: React.FC<{
   value: string;
   onChange: (key: string) => void;
 }> = ({ months, value, onChange }) => (
-  <label className="relative block">
-    <span className="sr-only">Chọn tháng</span>
-    <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" />
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full appearance-none bg-[#1C1C28] border border-white/10 hover:border-white/20 rounded-xl pl-8 pr-8 py-2 text-xs font-semibold text-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-white/10 transition-colors [color-scheme:dark]"
-    >
-      {months.map((m) => (
-        <option key={m.key} value={m.key} className="bg-[#1C1C28]">
-          {m.label}
-        </option>
-      ))}
-    </select>
-    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" />
-  </label>
+  <Select
+    size="sm"
+    ariaLabel="Chọn tháng"
+    icon={<CalendarDays />}
+    value={value}
+    onChange={onChange}
+    options={months.map((m) => ({ value: m.key, label: m.label }))}
+  />
 );
 
 const CoinHistoryCard: React.FC<{ config: (typeof COIN_CARDS)[number]; months: MonthOption[] }> = ({

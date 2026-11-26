@@ -1,10 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useLocation, useNavigate, useNavigationType } from 'react-router';
 import {
-  Compass,
-  PlaySquare,
-  Video,
-  UserCheck,
-  Wallet,
   Maximize2,
   X,
   Radio,
@@ -26,6 +22,8 @@ import {
 } from './data/mockData';
 import { INITIAL_USER_PROFILE, type UserProfile } from './data/accountData';
 import type { Language } from './components/SettingsMenu';
+import { NotFoundView } from './components/NotFoundView';
+import { parseRoute, paths, tabOf, titleOf } from './routes';
 
 const THEME_KEY = 'pulselive.theme';
 const LANGUAGE_KEY = 'pulselive.language';
@@ -49,14 +47,25 @@ function writeSetting(key: string, value: string) {
 }
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('home');
+  // The URL is the source of truth for which page is shown (see routes.ts)
+  const location = useLocation();
+  const navigate = useNavigate();
+  const navigationType = useNavigationType();
+  const route = parseRoute(location.pathname);
+  const activeTab = tabOf(route);
   const [brandTheme, setBrandTheme] = useState<BrandTheme>(() =>
     readSetting(THEME_KEY, ['violet', 'kick', 'coral'] as const, 'violet')
   );
   const [language, setLanguage] = useState<Language>(() =>
     readSetting(LANGUAGE_KEY, ['vi', 'en'] as const, 'vi')
   );
-  const [selectedChannel, setSelectedChannel] = useState<StreamChannel>(STREAM_CHANNELS[0]);
+  // Channel of the watch / channel page comes from the URL; elsewhere (mini-player) the last one opened
+  const [lastChannel, setLastChannel] = useState<StreamChannel>(STREAM_CHANNELS[0]);
+  const selectedChannel =
+    route.page === 'watch' || route.page === 'channel' ? route.channel : lastChannel;
+  // Components call onSelectChannel(ch) and then setActiveTab('watch' | 'channel') in the same
+  // click handler; this carries the picked channel to that navigation before state re-renders.
+  const pendingChannelRef = useRef<StreamChannel | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [theaterMode, setTheaterMode] = useState(false);
   const [pipActive, setPipActive] = useState(false);
@@ -78,6 +87,47 @@ export function App() {
     document.documentElement.setAttribute('data-theme', brandTheme);
     writeSetting(THEME_KEY, brandTheme);
   }, [brandTheme]);
+
+  // A new page starts at the top; Back/Forward (POP) keeps the browser's own scroll restoration
+  useEffect(() => {
+    if (navigationType !== 'POP') window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [location.pathname, navigationType]);
+
+  const pageTitle = titleOf(route);
+  useEffect(() => {
+    document.title = pageTitle;
+  }, [pageTitle]);
+
+  const go = (to: string) => navigate(to, { replace: to === location.pathname });
+
+  const selectChannel = (ch: StreamChannel) => {
+    setLastChannel(ch);
+    setPipActive(false);
+    pendingChannelRef.current = ch;
+    queueMicrotask(() => {
+      pendingChannelRef.current = null;
+    });
+  };
+
+  const setActiveTab = (tab: ActiveTab) => {
+    const channel = pendingChannelRef.current ?? selectedChannel;
+    pendingChannelRef.current = null;
+    if (tab === 'watch') setPipActive(false);
+    switch (tab) {
+      case 'home':
+        return go(paths.home());
+      case 'watch':
+        return go(paths.watch(channel.id));
+      case 'channel':
+        return go(paths.channel(channel.id));
+      case 'wallet':
+        return go(paths.wallet());
+      case 'account':
+        return go(paths.account());
+      case 'studio':
+        return go(paths.studio());
+    }
+  };
 
   useEffect(() => {
     document.documentElement.lang = language;
@@ -103,26 +153,21 @@ export function App() {
   };
 
   const handleEnablePiP = () => {
+    setLastChannel(selectedChannel);
     setPipActive(true);
-    setActiveTab('home');
+    go(paths.home());
   };
 
   return (
     <div className="min-h-screen bg-[#0E0E12] text-[#F4F4F6] flex flex-col">
       {/* Top Navigation Bar */}
       <Navbar
-        activeTab={activeTab}
-        setActiveTab={(tab) => {
-          if (tab === 'watch') setPipActive(false);
-          setActiveTab(tab);
-        }}
+        activeTab={activeTab ?? 'home'}
+        setActiveTab={setActiveTab}
         brandTheme={brandTheme}
         setBrandTheme={setBrandTheme}
         coins={coins}
-        onSelectChannel={(ch) => {
-          setSelectedChannel(ch);
-          setPipActive(false);
-        }}
+        onSelectChannel={selectChannel}
         cartCount={cartItems.reduce((acc, item) => acc + item.qty, 0)}
         userAvatar={userProfile.avatar}
         language={language}
@@ -130,16 +175,13 @@ export function App() {
       />
 
       {/* Main Content Layout: Collapsible Left Sidebar + Active View */}
-      <div className="flex-1 flex overflow-clip pb-14 md:pb-0">
+      <div className="flex-1 flex overflow-clip">
         {activeTab !== 'account' && activeTab !== 'studio' && !(activeTab === 'watch' && theaterMode) && (
           <Sidebar
             collapsed={sidebarCollapsed}
             setCollapsed={setSidebarCollapsed}
             selectedChannel={selectedChannel}
-            onSelectChannel={(ch) => {
-              setSelectedChannel(ch);
-              setPipActive(false);
-            }}
+            onSelectChannel={selectChannel}
             setActiveTab={setActiveTab}
             followedIds={followedIds}
           />
@@ -147,10 +189,7 @@ export function App() {
 
         {activeTab === 'home' && (
           <HomeView
-            onSelectChannel={(ch) => {
-              setSelectedChannel(ch);
-              setPipActive(false);
-            }}
+            onSelectChannel={selectChannel}
             setActiveTab={setActiveTab}
             brandTheme={brandTheme}
           />
@@ -158,6 +197,8 @@ export function App() {
 
         {activeTab === 'watch' && (
           <WatchRoomView
+            // A different channel is a different room: fresh chat, player and panel state
+            key={selectedChannel.id}
             channel={selectedChannel}
             theaterMode={theaterMode}
             setTheaterMode={setTheaterMode}
@@ -173,7 +214,14 @@ export function App() {
           />
         )}
 
-        {activeTab === 'studio' && <StreamerStudioView studio={studio} setActiveTab={setActiveTab} />}
+        {route.page === 'studio' && (
+          <StreamerStudioView
+            studio={studio}
+            setActiveTab={setActiveTab}
+            section={route.section}
+            onSectionChange={(section) => go(paths.studio(section))}
+          />
+        )}
 
         {activeTab === 'channel' && (
           <ChannelProfileView
@@ -195,25 +243,26 @@ export function App() {
           />
         )}
 
-        {activeTab === 'account' && (
+        {route.page === 'account' && (
           <AccountView
             profile={userProfile}
             onSaveProfile={setUserProfile}
             coins={coins}
             followedIds={followedIds}
             toggleFollow={toggleFollow}
-            onSelectChannel={(ch) => {
-              setSelectedChannel(ch);
-              setPipActive(false);
-            }}
+            onSelectChannel={selectChannel}
             setActiveTab={setActiveTab}
+            section={route.section}
+            onSectionChange={(section) => go(paths.account(section))}
           />
         )}
+
+        {route.page === 'notfound' && <NotFoundView onGoHome={() => go(paths.home())} />}
       </div>
 
       {/* FLOATING MINI-PLAYER (Picture-in-Picture Mode when browsing outside Watch Room) */}
       {pipActive && activeTab !== 'watch' && (
-        <div className="fixed bottom-16 md:bottom-5 right-5 z-50 w-72 sm:w-80 rounded-2xl overflow-hidden bg-[#161622] border border-white/20 shadow-2xl">
+        <div className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-50 w-72 sm:w-80 rounded-2xl overflow-hidden bg-[#161622] border border-white/20 shadow-2xl">
           <div className="relative aspect-video bg-black">
             <img
               src={selectedChannel.thumbnail}
@@ -254,55 +303,6 @@ export function App() {
           </div>
         </div>
       )}
-
-      {/* MOBILE BOTTOM NAVIGATION BAR */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 h-14 bg-[#121218]/95 backdrop-blur-xl border-t border-white/10 grid grid-cols-5">
-        <button
-          onClick={() => setActiveTab('home')}
-          className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold ${
-            activeTab === 'home' ? 'text-white' : 'text-zinc-500'
-          }`}
-        >
-          <Compass className="w-4 h-4" />
-          <span>Khám phá</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('watch')}
-          className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold ${
-            activeTab === 'watch' ? 'text-red-400' : 'text-zinc-500'
-          }`}
-        >
-          <PlaySquare className="w-4 h-4" />
-          <span>Xem Live</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('studio')}
-          className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold ${
-            activeTab === 'studio' ? 'text-violet-400' : 'text-zinc-500'
-          }`}
-        >
-          <Video className="w-4 h-4" />
-          <span>Phát Live</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('channel')}
-          className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold ${
-            activeTab === 'channel' ? 'text-white' : 'text-zinc-500'
-          }`}
-        >
-          <UserCheck className="w-4 h-4" />
-          <span>Kênh</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('wallet')}
-          className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold ${
-            activeTab === 'wallet' ? 'text-amber-400' : 'text-zinc-500'
-          }`}
-        >
-          <Wallet className="w-4 h-4" />
-          <span>Ví Xu</span>
-        </button>
-      </nav>
     </div>
   );
 }

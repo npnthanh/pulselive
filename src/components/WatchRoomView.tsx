@@ -31,6 +31,9 @@ import {
   Info,
   Crown,
   CalendarClock,
+  ChevronDown,
+  MessageCircle,
+  RectangleHorizontal,
 } from 'lucide-react';
 import {
   type StreamChannel,
@@ -43,7 +46,15 @@ import {
   type ChatMessage,
   TOP_SUPPORTERS,
 } from '../data/mockData';
+import { useDismiss } from '../hooks/useDismiss';
 import type { ActiveTab, BrandTheme } from './Navbar';
+
+// Safari (macOS/iPadOS) still only ships the webkit-prefixed Fullscreen API
+type FullscreenElement = HTMLElement & { webkitRequestFullscreen?: () => void };
+type FullscreenDocument = Document & {
+  webkitFullscreenElement?: Element | null;
+  webkitExitFullscreen?: () => void;
+};
 
 interface WatchRoomViewProps {
   channel: StreamChannel;
@@ -105,6 +116,12 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
   const [isMuted, setIsMuted] = useState(false);
   const [quality, setQuality] = useState<'1080p60 Source' | '720p60' | '480p'>('1080p60 Source');
   const [showQualityMenu, setShowQualityMenu] = useState(false);
+  // Fullscreen: native API where available; iPhone Safari has none for non-<video> elements,
+  // so it falls back to a fixed full-viewport overlay ("pseudo" fullscreen)
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const [nativeFullscreen, setNativeFullscreen] = useState(false);
+  const [pseudoFullscreen, setPseudoFullscreen] = useState(false);
+  const isFullscreen = nativeFullscreen || pseudoFullscreen;
   const [dvrPosition, setDvrPosition] = useState(100); // 100 = Real-time LIVE
   const [liveViewerCount, setLiveViewerCount] = useState(channel.viewers);
 
@@ -115,6 +132,11 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
   // Live Commerce State
   const [pinnedProduct, setPinnedProduct] = useState<LiveProduct>(LIVE_PRODUCTS[0]);
   const [showShopDrawer, setShowShopDrawer] = useState(false);
+  const qualityMenuRef = useRef<HTMLDivElement | null>(null);
+  const shopDrawerRef = useRef<HTMLDivElement | null>(null);
+  const shopToggleRef = useRef<HTMLButtonElement | null>(null);
+  useDismiss(showQualityMenu, [qualityMenuRef], () => setShowQualityMenu(false));
+  useDismiss(showShopDrawer, [shopDrawerRef, shopToggleRef], () => setShowShopDrawer(false));
   const [addedToast, setAddedToast] = useState<string | null>(null);
 
   // Gift & Reactions State
@@ -126,6 +148,8 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
 
   // Poll / Prediction State
   const [pollVisible, setPollVisible] = useState(true);
+  // Phones: the poll starts as a one-line pinned bar so the chat keeps its room
+  const [pollExpanded, setPollExpanded] = useState(false);
   const [votedOption, setVotedOption] = useState<'A' | 'B' | null>(null);
   const [pollVotes, setPollVotes] = useState({ A: 68, B: 32, total: 1420 });
 
@@ -135,7 +159,62 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
   const [isSuperChatMode, setIsSuperChatMode] = useState(false);
   const [autoScrollPaused, setAutoScrollPaused] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  // Phones show either the chat or the gifts/info panel under the video (md+ shows both)
+  const [mobilePanel, setMobilePanel] = useState<'chat' | 'info'>('chat');
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const doc = document as FullscreenDocument;
+    const sync = () => {
+      const current = doc.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
+      setNativeFullscreen(current !== null && current === stageRef.current);
+    };
+    document.addEventListener('fullscreenchange', sync);
+    document.addEventListener('webkitfullscreenchange', sync);
+    return () => {
+      document.removeEventListener('fullscreenchange', sync);
+      document.removeEventListener('webkitfullscreenchange', sync);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!pseudoFullscreen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPseudoFullscreen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [pseudoFullscreen]);
+
+  const toggleFullscreen = async () => {
+    const doc = document as FullscreenDocument;
+    if (pseudoFullscreen) {
+      setPseudoFullscreen(false);
+      return;
+    }
+    if (doc.fullscreenElement || doc.webkitFullscreenElement) {
+      if (doc.exitFullscreen) await doc.exitFullscreen().catch(() => {});
+      else doc.webkitExitFullscreen?.();
+      return;
+    }
+    const el = stageRef.current as FullscreenElement | null;
+    if (!el) return;
+    try {
+      if (el.requestFullscreen) await el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+      else {
+        setPseudoFullscreen(true);
+        return;
+      }
+      // Phones: prefer landscape while fullscreen (Android Chrome; other browsers reject — ignore)
+      const orientation = screen.orientation as ScreenOrientation & {
+        lock?: (orientation: string) => Promise<void>;
+      };
+      await orientation.lock?.('landscape').catch(() => {});
+    } catch {
+      setPseudoFullscreen(true);
+    }
+  };
 
   useEffect(() => {
     setLiveViewerCount(channel.viewers);
@@ -308,6 +387,17 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
     });
   };
 
+  const buyPinnedProduct = () => {
+    onAddToCart(pinnedProduct);
+    setAddedToast(pinnedProduct.name);
+    setTimeout(() => setAddedToast(null), 2200);
+  };
+  const pinnedDiscount = Math.round((1 - pinnedProduct.price / pinnedProduct.originalPrice) * 100);
+  const cartCount = cartItems.reduce((acc, i) => acc + i.qty, 0);
+  const cartTotal = cartItems.reduce((acc, i) => acc + i.product.price * i.qty, 0);
+  const qtyInCart = (productId: string) =>
+    cartItems.find((i) => i.product.id === productId)?.qty ?? 0;
+
   const isFollowed = followedIds.includes(channel.id);
   const totalPk = myPkScore + oppPkScore;
   const myPkPercent = Math.round((myPkScore / totalPk) * 100);
@@ -320,12 +410,28 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
       : 'bg-rose-600 hover:bg-rose-500';
 
   return (
-    <div className="flex-1 flex flex-col lg:flex-row h-[calc(100vh-4rem)] overflow-hidden bg-[#0E0E12]">
+    <div className="flex-1 min-w-0 flex flex-col lg:flex-row h-[calc(100vh-4rem)] max-md:h-[calc(100dvh-4rem)] overflow-hidden bg-[#0E0E12]">
       {/* CENTER COLUMN: VIDEO STAGE + STREAMER INFO + GIFT DOCK */}
-      <div className="flex-1 flex flex-col overflow-y-auto min-w-0">
+      <div
+        className={`flex-1 flex flex-col overflow-y-auto min-w-0 ${
+          mobilePanel === 'chat' ? 'max-md:flex-none max-md:overflow-visible' : ''
+        }`}
+      >
+        {/* Phones: video, pinned product and panel tabs stay pinned together while the info tab scrolls.
+            The block's z-index is its stacking context, so it is raised for the shop sheet / fullscreen. */}
+        <div
+          className={`shrink-0 max-md:sticky max-md:top-0 ${
+            pseudoFullscreen ? 'z-[100]' : showShopDrawer ? 'max-md:z-[60]' : 'max-md:z-30'
+          }`}
+        >
         {/* MAIN VIDEO PLAYER STAGE */}
         <div
-          className="relative w-full shrink-0 bg-black overflow-hidden select-none group aspect-video max-h-[calc(100vh-4rem)]"
+          ref={stageRef}
+          className={`w-full shrink-0 bg-black overflow-hidden select-none group ${
+            pseudoFullscreen
+              ? 'fixed inset-0 z-[100] h-[100dvh]'
+              : `relative aspect-video ${streamMode === 'pk' ? 'max-md:aspect-[4/3]' : ''} max-h-[calc(100vh-4rem)]`
+          }`}
         >
           {/* MODE 1 & 3: SINGLE STREAM STAGE */}
           {streamMode !== 'pk' ? (
@@ -333,7 +439,7 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
               <img
                 src={channel.thumbnail}
                 alt={channel.title}
-                className={`w-full h-full object-cover transition-all duration-700 ${
+                className={`w-full h-full ${isFullscreen ? 'object-contain' : 'object-cover'} transition-all duration-700 ${
                   isPlaying ? 'scale-100 opacity-85' : 'scale-105 opacity-40 blur-[2px]'
                 }`}
               />
@@ -343,29 +449,34 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
             /* MODE 2: PK BATTLE SPLIT-SCREEN STAGE (TikTok/Bigo PK UI) */
             <div className="relative w-full h-full flex flex-col bg-[#101018]">
               {/* PK Top Health / Score Bar */}
-              <div className="relative z-20 px-4 pt-13 pb-2 bg-gradient-to-b from-black/90 to-transparent">
-                <div className="flex items-center justify-between text-xs font-extrabold mb-1.5">
-                  <div className="flex items-center gap-2 text-cyan-300">
-                    <span className="px-2 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/40">
-                      ĐỘI CHỦ NHÀ • {myPkPercent}%
+              <div className="relative z-20 px-3 sm:px-4 pt-11 sm:pt-13 pb-2 bg-gradient-to-b from-black/90 to-transparent">
+                <div className="flex items-center justify-between gap-1.5 text-[10px] sm:text-xs font-extrabold mb-1.5 whitespace-nowrap">
+                  <div className="flex items-center gap-1.5 sm:gap-2 text-cyan-300">
+                    <span className="px-1.5 sm:px-2 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/40">
+                      <span className="hidden sm:inline">ĐỘI CHỦ NHÀ • </span>
+                      {myPkPercent}%
                     </span>
                     <span className="tabular-nums text-white">
-                      {myPkScore.toLocaleString('vi-VN')} điểm
+                      {myPkScore.toLocaleString('vi-VN')}
+                      <span className="hidden sm:inline"> điểm</span>
                     </span>
                   </div>
 
                   {/* PK Countdown Timer Center */}
-                  <div className="px-3 py-1 rounded-full bg-gradient-to-r from-pink-600 via-rose-500 to-amber-500 text-white text-xs font-black tracking-wider flex items-center gap-1.5 shadow-lg">
-                    <Swords className="w-3.5 h-3.5" />
-                    <span>PK TIME • 02:34</span>
+                  <div className="px-2 sm:px-3 py-1 rounded-full bg-gradient-to-r from-pink-600 via-rose-500 to-amber-500 text-white text-[10px] sm:text-xs font-black tracking-wider flex items-center gap-1 sm:gap-1.5 shadow-lg">
+                    <Swords className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                    <span>
+                      <span className="hidden sm:inline">PK TIME • </span>02:34
+                    </span>
                   </div>
 
-                  <div className="flex items-center gap-2 text-pink-300">
+                  <div className="flex items-center gap-1.5 sm:gap-2 text-pink-300">
                     <span className="tabular-nums text-white">
-                      {oppPkScore.toLocaleString('vi-VN')} điểm
+                      {oppPkScore.toLocaleString('vi-VN')}
+                      <span className="hidden sm:inline"> điểm</span>
                     </span>
-                    <span className="px-2 py-0.5 rounded bg-pink-500/20 border border-pink-400/40">
-                      {100 - myPkPercent}% • ĐỐI THỦ
+                    <span className="px-1.5 sm:px-2 py-0.5 rounded bg-pink-500/20 border border-pink-400/40">
+                      {100 - myPkPercent}%<span className="hidden sm:inline"> • ĐỐI THỦ</span>
                     </span>
                   </div>
                 </div>
@@ -382,7 +493,7 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
               </div>
 
               {/* Split 2 Cameras */}
-              <div className="flex-1 grid grid-cols-2 gap-1 px-2 pb-12">
+              <div className="flex-1 grid grid-cols-2 gap-1 px-2 pb-14 sm:pb-12">
                 {/* Left Streamer (Host) */}
                 <div className="relative rounded-2xl overflow-hidden border border-cyan-500/40 bg-black">
                   <img
@@ -391,17 +502,17 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
                     className="w-full h-full object-cover opacity-85"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                  <div className="absolute bottom-3 left-3 flex items-center gap-2">
+                  <div className="absolute bottom-2 left-2 right-2 sm:bottom-3 sm:left-3 sm:right-auto flex items-center gap-1.5 sm:gap-2 min-w-0">
                     <img
                       src={channel.avatar}
                       alt={channel.name}
-                      className="w-8 h-8 rounded-full object-cover ring-2 ring-cyan-400"
+                      className="w-6 h-6 sm:w-8 sm:h-8 rounded-full object-cover ring-2 ring-cyan-400 shrink-0"
                     />
-                    <div>
-                      <span className="text-xs font-extrabold text-white block">
+                    <div className="min-w-0">
+                      <span className="text-[11px] sm:text-xs font-extrabold text-white block truncate">
                         {channel.name}
                       </span>
-                      <span className="text-[10px] text-cyan-300 font-bold">
+                      <span className="hidden sm:inline text-[10px] text-cyan-300 font-bold">
                         👑 MVP: HoangTuan_VIP
                       </span>
                     </div>
@@ -416,26 +527,26 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
                     className="w-full h-full object-cover opacity-85"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                  <div className="absolute bottom-3 left-3 flex items-center gap-2">
+                  <div className="absolute bottom-2 left-2 right-2 sm:bottom-3 sm:left-3 sm:right-auto flex items-center gap-1.5 sm:gap-2 min-w-0">
                     <img
                       src="https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=160&auto=format&fit=crop&q=80"
                       alt="Minh Trang Vocal"
-                      className="w-8 h-8 rounded-full object-cover ring-2 ring-pink-400"
+                      className="w-6 h-6 sm:w-8 sm:h-8 rounded-full object-cover ring-2 ring-pink-400 shrink-0"
                     />
-                    <div>
-                      <span className="text-xs font-extrabold text-white block">
+                    <div className="min-w-0">
+                      <span className="text-[11px] sm:text-xs font-extrabold text-white block truncate">
                         Minh Trang Vocal
                       </span>
-                      <span className="text-[10px] text-pink-300 font-bold">
+                      <span className="hidden sm:inline text-[10px] text-pink-300 font-bold">
                         Đang hát: Nàng Thơ (Acoustic)
                       </span>
                     </div>
                   </div>
                   <button
                     onClick={handleSendGift}
-                    className="absolute bottom-3 right-3 px-2.5 py-1 rounded-lg bg-pink-600/90 hover:bg-pink-500 text-[11px] font-bold text-white shadow cursor-pointer"
+                    className="absolute top-2 right-2 sm:top-auto sm:bottom-3 sm:right-3 px-2 sm:px-2.5 py-1 rounded-lg bg-pink-600/90 hover:bg-pink-500 text-[10px] sm:text-[11px] font-bold text-white shadow cursor-pointer whitespace-nowrap"
                   >
-                    ⚡ Tiếp máu PK ngay
+                    ⚡ Tiếp máu<span className="hidden sm:inline"> PK ngay</span>
                   </button>
                 </div>
               </div>
@@ -443,13 +554,13 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
           )}
 
           {/* TOP OVERLAY STATUS BAR ON VIDEO */}
-          <div className="absolute top-3 left-4 right-4 flex items-center justify-between pointer-events-none z-20">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 rounded-lg bg-red-600 text-white text-xs font-black tracking-wider flex items-center gap-1.5 shadow-lg live-pulse">
+          <div className="absolute top-2 left-2.5 right-2.5 sm:top-3 sm:left-4 sm:right-4 flex items-center justify-between pointer-events-none z-20">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="px-2 sm:px-2.5 py-1 rounded-lg bg-red-600 text-white text-[11px] sm:text-xs font-black tracking-wider flex items-center gap-1.5 shadow-lg live-pulse">
                 <span className="w-2 h-2 rounded-full bg-white" />
                 LIVE
               </span>
-              <span className="px-2.5 py-1 rounded-lg bg-black/65 backdrop-blur-md text-white text-xs font-bold flex items-center gap-1.5 border border-white/10 tabular-nums">
+              <span className="px-2 sm:px-2.5 py-1 rounded-lg bg-black/65 backdrop-blur-md text-white text-[11px] sm:text-xs font-bold flex items-center gap-1.5 border border-white/10 tabular-nums">
                 <Users className="w-3.5 h-3.5 text-red-400" />
                 {liveViewerCount.toLocaleString('vi-VN')}
               </span>
@@ -460,7 +571,7 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 rounded-lg bg-black/65 backdrop-blur-md text-emerald-400 text-[11px] font-bold border border-emerald-500/30 flex items-center gap-1">
+              <span className="hidden sm:flex px-2.5 py-1 rounded-lg bg-black/65 backdrop-blur-md text-emerald-400 text-[11px] font-bold border border-emerald-500/30 items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 Độ trễ siêu thấp (0.8s)
               </span>
@@ -471,7 +582,7 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
           {activeGiftBanner && (
             <div
               key={activeGiftBanner.id}
-              className="absolute top-16 left-4 z-30 animate-gift-banner pointer-events-none"
+              className="absolute top-11 left-2.5 sm:top-16 sm:left-4 z-30 animate-gift-banner pointer-events-none"
             >
               <div
                 className={`flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-gradient-to-r ${activeGiftBanner.gift.color} text-white shadow-2xl border border-white/30`}
@@ -494,8 +605,8 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
 
           {/* LIVE COMMERCE PINNED PRODUCT OVERLAY (When in Commerce mode) */}
           {streamMode === 'commerce' && (
-            <div className="absolute bottom-24 left-4 z-30 w-80 sm:w-96 bg-[#161621]/95 backdrop-blur-xl border border-amber-400/40 rounded-2xl p-3 shadow-2xl">
-              <div className="flex items-center justify-between mb-2">
+            <div className="max-md:hidden absolute bottom-16 left-2.5 right-16 sm:bottom-24 sm:left-4 sm:right-auto z-30 sm:w-96 bg-[#161621]/95 backdrop-blur-xl border border-amber-400/40 rounded-2xl p-2 sm:p-3 shadow-2xl">
+              <div className="hidden sm:flex items-center justify-between mb-2">
                 <span className="px-2 py-0.5 rounded bg-amber-400 text-slate-950 text-[10px] font-extrabold uppercase">
                   🔥 {pinnedProduct.badge} • Flash Sale 09:42
                 </span>
@@ -512,35 +623,31 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
                 <img
                   src={pinnedProduct.image}
                   alt={pinnedProduct.name}
-                  className="w-16 h-16 rounded-xl object-cover border border-white/10 shrink-0"
+                  className="w-11 h-11 sm:w-16 sm:h-16 rounded-xl object-cover border border-white/10 shrink-0"
                 />
                 <div className="min-w-0 flex-1">
-                  <h4 className="text-xs font-bold text-white line-clamp-2 leading-snug">
+                  <h4 className="text-xs font-bold text-white line-clamp-1 sm:line-clamp-2 leading-snug">
                     {pinnedProduct.name}
                   </h4>
-                  <div className="flex items-baseline gap-2 mt-1">
+                  <div className="flex items-baseline gap-2 mt-0.5 sm:mt-1">
                     <span className="text-sm font-black text-amber-400 tabular-nums">
                       {pinnedProduct.price.toLocaleString('vi-VN')}đ
                     </span>
-                    <span className="text-[11px] text-zinc-500 line-through tabular-nums">
+                    <span className="hidden sm:inline text-[11px] text-zinc-500 line-through tabular-nums">
                       {pinnedProduct.originalPrice.toLocaleString('vi-VN')}đ
                     </span>
                   </div>
                 </div>
                 <button
-                  onClick={() => {
-                    onAddToCart(pinnedProduct);
-                    setAddedToast(pinnedProduct.name);
-                    setTimeout(() => setAddedToast(null), 2200);
-                  }}
-                  className="px-3 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-extrabold text-xs shadow hover:scale-105 transition-transform shrink-0 cursor-pointer"
+                  onClick={buyPinnedProduct}
+                  className="px-2.5 sm:px-3 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-extrabold text-xs shadow hover:scale-105 transition-transform shrink-0 whitespace-nowrap cursor-pointer"
                 >
                   Mua ngay
                 </button>
               </div>
 
               {addedToast && (
-                <div className="mt-2 px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold flex items-center gap-1.5">
+                <div className="mt-1.5 sm:mt-2 px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold flex items-center gap-1.5">
                   <Check className="w-3.5 h-3.5" /> Đã thêm vào giỏ hàng Live!
                 </div>
               )}
@@ -548,7 +655,7 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
           )}
 
           {/* FLOATING HEARTS REACTION STREAM (Right Edge of Video) */}
-          <div className="absolute bottom-24 right-3 w-20 h-56 pointer-events-none overflow-hidden z-20">
+          <div className="absolute bottom-16 right-1 sm:bottom-24 sm:right-3 w-20 h-56 pointer-events-none overflow-hidden z-20">
             {floatingHearts.map((h) => (
               <span
                 key={h.id}
@@ -561,23 +668,24 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
           </div>
 
           {/* Floating Heart Trigger Button & Shopping Bag Trigger on Video Right */}
-          <div className="absolute bottom-24 right-4 z-30 flex flex-col items-center gap-2.5">
+          <div className="absolute bottom-16 right-2.5 sm:bottom-24 sm:right-4 z-30 flex flex-col items-center gap-2 sm:gap-2.5">
             {streamMode === 'commerce' && (
               <button
+                ref={shopToggleRef}
                 onClick={() => setShowShopDrawer(!showShopDrawer)}
-                className="relative p-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-xl transition-transform active:scale-90 cursor-pointer"
+                className="relative p-2.5 sm:p-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-xl transition-transform active:scale-90 cursor-pointer"
                 title="Mở Giỏ Hàng Livestream"
               >
                 <ShoppingBag className="w-5 h-5" />
                 <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-600 text-white text-[10px] font-black flex items-center justify-center">
-                  {cartItems.reduce((acc, i) => acc + i.qty, 0)}
+                  {cartCount}
                 </span>
               </button>
             )}
 
             <button
               onClick={triggerHeart}
-              className="p-3 rounded-full bg-rose-600/90 hover:bg-rose-500 text-white shadow-lg shadow-rose-900/40 ring-1 ring-white/20 transition-transform hover:scale-105 active:scale-90 cursor-pointer"
+              className="p-2.5 sm:p-3 rounded-full bg-rose-600/90 hover:bg-rose-500 text-white shadow-lg shadow-rose-900/40 ring-1 ring-white/20 transition-transform hover:scale-105 active:scale-90 cursor-pointer"
               title="Thả tim cổ vũ Streamer"
             >
               <Heart className="w-5 h-5 fill-white" />
@@ -585,7 +693,11 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
           </div>
 
           {/* VIDEO PLAYER BOTTOM CONTROLS & DVR BAR */}
-          <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/90 via-black/55 to-transparent px-4 pt-8 pb-2.5">
+          <div
+            className={`absolute bottom-0 left-0 right-0 ${
+              showQualityMenu ? 'z-40' : 'z-20'
+            } bg-gradient-to-t from-black/90 via-black/55 to-transparent px-2.5 sm:px-4 pt-6 sm:pt-8 pb-1.5 sm:pb-2.5`}
+          >
             {/* DVR Seekbar (YouTube Live style scrubbable progress) */}
             <div className="relative h-4 flex items-center group/seek">
               <div className="absolute inset-x-0 h-1 group-hover/seek:h-1.5 rounded-full bg-white/20 overflow-hidden transition-all">
@@ -655,7 +767,7 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
 
               {/* Right Player Controls: Quality Selector, Theater, PiP */}
               <div className="flex items-center gap-1 shrink-0">
-                <div className="relative">
+                <div ref={qualityMenuRef} className="relative">
                   <button
                     onClick={() => setShowQualityMenu(!showQualityMenu)}
                     className="px-2.5 py-1.5 rounded-lg hover:bg-white/15 text-xs font-bold text-white flex items-center gap-1.5 cursor-pointer"
@@ -695,15 +807,29 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
                   <PictureInPicture2 className="w-4.5 h-4.5" />
                 </button>
 
+                {/* Theater mode only hides the left sidebar, which exists from lg up */}
+                {!isFullscreen && (
+                  <button
+                    onClick={() => setTheaterMode(!theaterMode)}
+                    className={`hidden lg:inline-flex p-1.5 rounded-lg transition-colors cursor-pointer ${
+                      theaterMode ? 'bg-white/15 text-violet-300' : 'text-white hover:bg-white/15'
+                    }`}
+                    title={theaterMode ? 'Thoát chế độ rạp chiếu phim' : 'Chế độ rạp chiếu phim — ẩn thanh bên để mở rộng video'}
+                    aria-pressed={theaterMode}
+                  >
+                    <RectangleHorizontal className="w-4.5 h-4.5" />
+                  </button>
+                )}
+
                 <button
-                  onClick={() => setTheaterMode(!theaterMode)}
+                  onClick={toggleFullscreen}
                   className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                    theaterMode ? 'bg-white/15 text-violet-300' : 'text-white hover:bg-white/15'
+                    isFullscreen ? 'bg-white/15 text-violet-300' : 'text-white hover:bg-white/15'
                   }`}
-                  title={theaterMode ? 'Thoát chế độ rạp chiếu phim' : 'Chế độ rạp chiếu phim — ẩn thanh bên để mở rộng video'}
-                  aria-pressed={theaterMode}
+                  title={isFullscreen ? 'Thoát toàn màn hình (Esc)' : 'Toàn màn hình'}
+                  aria-pressed={isFullscreen}
                 >
-                  {theaterMode ? (
+                  {isFullscreen ? (
                     <Minimize2 className="w-4.5 h-4.5" />
                   ) : (
                     <Maximize2 className="w-4.5 h-4.5" />
@@ -715,12 +841,18 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
 
           {/* LIVE SHOPPING SLIDE-OVER DRAWER (Inside Video Stage when opened) */}
           {showShopDrawer && (
-            <div className="absolute top-0 right-0 bottom-0 w-80 sm:w-96 bg-[#14141D]/98 backdrop-blur-2xl border-l border-white/15 z-40 flex flex-col p-4 shadow-2xl">
+            <div
+              className="md:hidden fixed inset-0 z-[55] bg-black/60"
+              onClick={() => setShowShopDrawer(false)}
+            />
+          )}
+          {showShopDrawer && (
+            <div ref={shopDrawerRef} className="fixed inset-x-0 bottom-0 max-h-[75dvh] rounded-t-3xl border-t pb-[calc(1rem+env(safe-area-inset-bottom))] z-[60] md:absolute md:inset-x-auto md:top-0 md:right-0 md:bottom-0 md:max-h-none md:w-96 md:rounded-none md:border-t-0 md:border-l md:pb-4 md:z-40 bg-[#14141D]/98 backdrop-blur-2xl border-white/15 flex flex-col p-4 shadow-2xl">
               <div className="flex items-center justify-between pb-3 border-b border-white/10">
                 <div className="flex items-center gap-2">
                   <ShoppingBag className="w-4 h-4 text-amber-400" />
                   <h3 className="text-sm font-extrabold text-white">
-                    Giỏ Hàng Phiên Live ({LIVE_PRODUCTS.length})
+                    Sản Phẩm Phiên Live ({LIVE_PRODUCTS.length})
                   </h3>
                 </div>
                 <button
@@ -735,7 +867,11 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
                 {LIVE_PRODUCTS.map((prod, idx) => (
                   <div
                     key={prod.id}
-                    className="p-2.5 rounded-2xl bg-white/5 border border-white/8 hover:border-amber-400/40 transition-all flex gap-3"
+                    className={`p-2.5 rounded-2xl border transition-all flex gap-3 ${
+                      pinnedProduct.id === prod.id
+                        ? 'bg-amber-400/8 border-amber-400/40'
+                        : 'bg-white/5 border-white/8 hover:border-amber-400/40'
+                    }`}
                   >
                     <div className="relative w-16 h-16 rounded-xl overflow-hidden shrink-0">
                       <img
@@ -760,35 +896,155 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
                         </div>
                       </div>
                       <div className="flex items-center justify-between mt-1.5">
-                        <button
-                          onClick={() => setPinnedProduct(prod)}
-                          className="text-[10px] font-semibold text-zinc-400 hover:text-white cursor-pointer"
-                        >
-                          📌 Xem trên màn hình
-                        </button>
+                        {pinnedProduct.id === prod.id ? (
+                          <span className="text-[10px] font-bold text-amber-300">📌 Đang ghim trên live</span>
+                        ) : (
+                          <button
+                            onClick={() => setPinnedProduct(prod)}
+                            className="text-[10px] font-semibold text-zinc-400 hover:text-white cursor-pointer"
+                          >
+                            📌 Xem trên màn hình
+                          </button>
+                        )}
                         <button
                           onClick={() => onAddToCart(prod)}
-                          className="px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-[11px] flex items-center gap-1 cursor-pointer"
+                          className="relative px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-[11px] flex items-center gap-1 cursor-pointer"
                         >
                           <Plus className="w-3 h-3" /> Thêm giỏ
+                          {qtyInCart(prod.id) > 0 && (
+                            <span className="absolute -top-2 -right-2 min-w-4 h-4 px-1 rounded-full bg-red-600 text-white text-[9px] font-black flex items-center justify-center tabular-nums">
+                              {qtyInCart(prod.id)}
+                            </span>
+                          )}
                         </button>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
+
+              {/* Cart summary + checkout (checkout lives in the wallet page) */}
+              <div className="pt-3 border-t border-white/10 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] text-zinc-400">Giỏ hàng ({cartCount} sản phẩm)</p>
+                  <p className="text-base font-black text-amber-400 tabular-nums">
+                    {cartTotal.toLocaleString('vi-VN')}đ
+                  </p>
+                </div>
+                <button
+                  disabled={cartCount === 0}
+                  onClick={() => {
+                    setShowShopDrawer(false);
+                    setActiveTab('wallet');
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-extrabold text-xs shadow flex items-center gap-1.5 whitespace-nowrap cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <ShoppingBag className="w-4 h-4" /> Thanh toán
+                </button>
+              </div>
             </div>
           )}
         </div>
 
+        {/* PHONE PINNED PRODUCT STRIP (live commerce): keeps the short phone video unobstructed */}
+        {streamMode === 'commerce' && (
+          <div className="md:hidden flex items-center gap-2.5 px-3 py-2 bg-gradient-to-r from-amber-500/12 via-[#16141B] to-[#16141B] border-b border-amber-400/25">
+            <button
+              onClick={() => setShowShopDrawer(true)}
+              className="relative shrink-0 cursor-pointer"
+              title={`Xem tất cả ${LIVE_PRODUCTS.length} sản phẩm`}
+            >
+              <img
+                src={pinnedProduct.image}
+                alt={pinnedProduct.name}
+                className="w-11 h-11 rounded-lg object-cover border border-white/10"
+              />
+              <span className="absolute -bottom-1 -right-1 px-1 rounded bg-black/85 border border-white/15 text-[9px] font-bold text-amber-300 tabular-nums">
+                {LIVE_PRODUCTS.length}
+              </span>
+            </button>
+            <button
+              onClick={() => setShowShopDrawer(true)}
+              className="min-w-0 flex-1 text-left cursor-pointer"
+            >
+              <p className="text-xs font-bold text-white truncate">{pinnedProduct.name}</p>
+              <div className="flex items-baseline gap-1.5 mt-0.5 whitespace-nowrap">
+                <span className="text-sm font-black text-amber-400 tabular-nums">
+                  {pinnedProduct.price.toLocaleString('vi-VN')}đ
+                </span>
+                <span className="text-[10px] text-zinc-500 line-through tabular-nums truncate">
+                  {pinnedProduct.originalPrice.toLocaleString('vi-VN')}đ
+                </span>
+                <span className="px-1 rounded bg-red-500/20 text-red-300 text-[10px] font-extrabold">
+                  -{pinnedDiscount}%
+                </span>
+              </div>
+            </button>
+            <button
+              onClick={buyPinnedProduct}
+              className={`px-3 py-2 rounded-xl font-extrabold text-xs shadow shrink-0 whitespace-nowrap flex items-center gap-1 cursor-pointer transition-colors ${
+                addedToast
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                  : 'bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950'
+              }`}
+            >
+              {addedToast ? (
+                <>
+                  <Check className="w-3.5 h-3.5" /> Đã thêm
+                </>
+              ) : (
+                'Mua ngay'
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* PHONE PANEL SWITCHER: chat vs gifts & channel info share the space under the video */}
+        <div className="md:hidden grid grid-cols-2 bg-[#13131A] border-b border-white/8">
+          <button
+            onClick={() => setMobilePanel('chat')}
+            aria-pressed={mobilePanel === 'chat'}
+            className={`relative py-2.5 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer ${
+              mobilePanel === 'chat' ? 'text-white' : 'text-zinc-500'
+            }`}
+          >
+            <MessageCircle className="w-4 h-4" />
+            Trò chuyện
+            <span className="text-[10px] font-semibold text-zinc-500 tabular-nums">
+              {((liveViewerCount * 0.22) / 1000).toFixed(1)}K
+            </span>
+            {mobilePanel === 'chat' && (
+              <span className="absolute bottom-0 inset-x-8 h-0.5 rounded-full bg-(--brand)" />
+            )}
+          </button>
+          <button
+            onClick={() => setMobilePanel('info')}
+            aria-pressed={mobilePanel === 'info'}
+            className={`relative py-2.5 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer ${
+              mobilePanel === 'info' ? 'text-white' : 'text-zinc-500'
+            }`}
+          >
+            <Gift className="w-4 h-4" />
+            Quà &amp; Thông tin
+            {mobilePanel === 'info' && (
+              <span className="absolute bottom-0 inset-x-8 h-0.5 rounded-full bg-(--brand)" />
+            )}
+          </button>
+        </div>
+        </div>
+
         {/* 2. INTERACTIVE GIFT DOCK (Virtual Gifting Bar right under Video) */}
-        <div className="bg-[#15151F] border-b border-white/8 px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-3">
-          <span className="text-xs font-extrabold text-zinc-300 flex items-center gap-1.5 shrink-0">
+        <div
+          className={`bg-[#15151F] border-b border-white/8 px-3 sm:px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-3 ${
+            mobilePanel === 'chat' ? 'max-md:hidden' : ''
+          }`}
+        >
+          <span className="max-md:hidden text-xs font-extrabold text-zinc-300 flex items-center gap-1.5 shrink-0">
             <Gift className="w-4 h-4 text-rose-400" />
             <span>Quà Tặng</span>
           </span>
 
-          <div className="flex-1 min-w-60 flex items-stretch gap-2 overflow-x-auto scroll-subtle pb-1 -mb-1">
+          <div className="flex-1 min-w-60 max-md:min-w-full flex items-stretch gap-2 overflow-x-auto scroll-subtle pb-1 -mb-1">
             {VIRTUAL_GIFTS.map((gift) => {
               const selected = selectedGift.id === gift.id;
               return (
@@ -818,7 +1074,7 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
           </div>
 
           {/* Multiplier & Send Gift CTA */}
-          <div className="flex items-center gap-2 shrink-0 ml-auto">
+          <div className="flex items-center gap-2 shrink-0 ml-auto max-md:w-full">
             <div className="flex items-center bg-[#1C1C28] border border-white/10 rounded-xl p-1">
               {[1, 10, 66, 99].map((mult) => (
                 <button
@@ -838,7 +1094,7 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
 
             <button
               onClick={handleSendGift}
-              className="h-9.5 px-4 rounded-xl bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500 text-slate-950 font-black text-xs shadow-lg shadow-orange-900/30 hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
+              className="h-9.5 px-4 max-md:flex-1 justify-center rounded-xl bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500 text-slate-950 font-black text-xs shadow-lg shadow-orange-900/30 hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
             >
               <Sparkles className="w-4 h-4" />
               <span>
@@ -849,7 +1105,7 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
         </div>
 
         {/* 3. STREAMER METADATA & CHANNEL ABOUT PANELS */}
-        <div className="p-4 sm:p-6 space-y-6">
+        <div className={`p-4 sm:p-6 space-y-6 ${mobilePanel === 'chat' ? 'max-md:hidden' : ''}`}>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-white/8">
             <div className="flex items-start gap-3.5">
               <div className="relative shrink-0">
@@ -987,9 +1243,13 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
       </div>
 
       {/* RIGHT COLUMN: SMART LIVE CHAT + LEADERBOARD + POLLS */}
-      <aside className="w-full lg:w-88 xl:w-96 shrink-0 bg-[#13131A] border-t lg:border-t-0 lg:border-l border-white/8 flex flex-col h-[420px] lg:h-full">
-        {/* Chat Header */}
-        <div className="px-4 py-3 border-b border-white/8 flex items-center justify-between">
+      <aside
+        className={`w-full lg:w-88 xl:w-96 shrink-0 bg-[#13131A] border-t lg:border-t-0 lg:border-l border-white/8 flex flex-col h-[420px] lg:h-full max-md:h-auto max-md:flex-1 max-md:min-h-0 max-md:border-t-0 ${
+          mobilePanel === 'info' ? 'max-md:hidden' : ''
+        }`}
+      >
+        {/* Chat Header (phones use the panel switcher above instead) */}
+        <div className="max-md:hidden px-4 py-3 border-b border-white/8 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             <h2 className="text-xs font-extrabold uppercase tracking-wider text-white">
@@ -1001,9 +1261,13 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
           </span>
         </div>
 
-        {/* Top 3 Supporters Leaderboard Bar */}
-        <div className="px-3 py-2 bg-[#171721] border-b border-white/6">
-          <div className="flex items-center justify-between mb-1.5">
+        {/* Top 3 Supporters Leaderboard Bar (hidden on phones during live commerce to give chat room) */}
+        <div
+          className={`px-3 py-2 bg-[#171721] border-b border-white/6 ${
+            streamMode === 'commerce' ? 'max-md:hidden' : ''
+          }`}
+        >
+          <div className="max-md:hidden flex items-center justify-between mb-1.5">
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-400 flex items-center gap-1">
               <Trophy className="w-3 h-3" /> Bảng Xếp Hạng Đại Gia Phiên Live
             </span>
@@ -1030,22 +1294,33 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
 
         {/* Interactive Poll / Prediction Widget */}
         {pollVisible && (
-          <div className="mx-3 mt-2.5 p-3 rounded-2xl bg-gradient-to-br from-violet-600/20 to-indigo-900/20 border border-violet-500/30">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-violet-300 flex items-center gap-1">
-                <Pin className="w-3 h-3" /> Dự Đoán Trực Tiếp ({pollVotes.total} lượt)
+          <div className="mx-3 mt-2 sm:mt-2.5 p-2.5 sm:p-3 rounded-2xl bg-gradient-to-br from-violet-600/20 to-indigo-900/20 border border-violet-500/30">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-violet-300 flex items-center gap-1 min-w-0">
+                <Pin className="w-3 h-3 shrink-0" />
+                <span className="truncate">Dự Đoán Trực Tiếp ({pollVotes.total} lượt)</span>
               </span>
-              <button
-                onClick={() => setPollVisible(false)}
-                className="text-[10px] text-zinc-400 hover:text-white cursor-pointer"
-              >
-                Ẩn
-              </button>
+              <div className="flex items-center gap-3 shrink-0">
+                <button
+                  onClick={() => setPollExpanded((v) => !v)}
+                  aria-expanded={pollExpanded}
+                  className="md:hidden text-[10px] font-bold text-violet-200 flex items-center gap-0.5 cursor-pointer"
+                >
+                  {pollExpanded ? 'Thu gọn' : votedOption ? 'Xem kết quả' : 'Bình chọn'}
+                  <ChevronDown className={`w-3 h-3 transition-transform ${pollExpanded ? 'rotate-180' : ''}`} />
+                </button>
+                <button
+                  onClick={() => setPollVisible(false)}
+                  className="text-[10px] text-zinc-400 hover:text-white cursor-pointer"
+                >
+                  Ẩn
+                </button>
+              </div>
             </div>
-            <p className="text-xs font-bold text-white mb-2">
+            <p className={`text-xs font-bold text-white mb-2 ${pollExpanded ? '' : 'max-md:truncate max-md:mb-0'}`}>
               Đội chủ nhà có chiến thắng áp đảo trong hiệp này không?
             </p>
-            <div className="space-y-1.5">
+            <div className={`space-y-1.5 ${pollExpanded ? '' : 'max-md:hidden'}`}>
               <button
                 onClick={() => handleVotePoll('A')}
                 className={`w-full relative overflow-hidden rounded-xl p-2 text-left text-xs font-bold border transition-all cursor-pointer ${
@@ -1155,7 +1430,7 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
         )}
 
         {/* Quick Emote Bar & Chat Input Form */}
-        <div className="p-3 bg-[#161620] border-t border-white/8 space-y-2">
+        <div className="p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] sm:p-3 bg-[#161620] border-t border-white/8 space-y-1.5 sm:space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
               {['🔥', '❤️', '😂', '👏', '🚀', '👑', '⚡'].map((emo) => (
@@ -1186,7 +1461,15 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
           </div>
 
           <form onSubmit={handleSendMessage} className="flex items-center gap-2">
-            <div className="relative flex-1">
+            <button
+              type="button"
+              onClick={() => setMobilePanel('info')}
+              className="md:hidden p-2 rounded-xl bg-rose-500/15 text-rose-300 border border-rose-500/30 shrink-0 cursor-pointer"
+              title="Tặng quà"
+            >
+              <Gift className="w-4 h-4" />
+            </button>
+            <div className="relative flex-1 min-w-0">
               <input
                 type="text"
                 value={chatInput}
@@ -1196,7 +1479,7 @@ export const WatchRoomView: React.FC<WatchRoomViewProps> = ({
                     ? 'Nhập tin nhắn Super Chat nổi bật (100 Xu)...'
                     : 'Gửi tin nhắn giao lưu...'
                 }
-                className={`w-full bg-[#1E1E2A] border rounded-xl pl-3 pr-8 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none ${
+                className={`w-full bg-[#1E1E2A] border rounded-xl pl-3 pr-8 py-2 text-base sm:text-xs text-white placeholder-zinc-500 focus:outline-none ${
                   isSuperChatMode
                     ? 'border-amber-400 ring-1 ring-amber-400/40'
                     : 'border-white/10 focus:border-white/30'

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   LayoutDashboard,
   MonitorPlay,
@@ -11,6 +11,7 @@ import {
   Check,
 } from 'lucide-react';
 import type { ActiveTab } from '../Navbar';
+import type { StudioSection } from '../../routes';
 import type { StudioState } from './useStudioState';
 import { useNow } from './useStudioState';
 import { StudioHome } from './StudioHome';
@@ -24,7 +25,7 @@ import { Modal } from './studioUi';
 import { btnDangerCls, btnGhostCls } from './styles';
 import { formatClock, formatNumber } from './format';
 
-export type StudioSection = 'home' | 'live' | 'analytics' | 'community' | 'videos' | 'customize';
+export type { StudioSection };
 
 const NAV: { id: StudioSection; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'home', label: 'Trang chủ', icon: LayoutDashboard },
@@ -35,11 +36,14 @@ const NAV: { id: StudioSection; label: string; icon: typeof LayoutDashboard }[] 
   { id: 'customize', label: 'Tùy chỉnh', icon: SlidersHorizontal },
 ];
 
-export const StreamerStudioView: React.FC<{ studio: StudioState; setActiveTab: (tab: ActiveTab) => void }> = ({
-  studio,
-  setActiveTab,
-}) => {
-  const [section, setSection] = useState<StudioSection>('home');
+export const StreamerStudioView: React.FC<{
+  studio: StudioState;
+  setActiveTab: (tab: ActiveTab) => void;
+  /** Current section — from the URL (/studio, /studio/live, …). */
+  section: StudioSection;
+  onSectionChange: (section: StudioSection) => void;
+}> = ({ studio, setActiveTab, section, onSectionChange: setSection }) => {
+  const navRailRef = useRef<HTMLDivElement | null>(null);
   const [goLiveOpen, setGoLiveOpen] = useState(false);
   const [endLiveOpen, setEndLiveOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -52,15 +56,33 @@ export const StreamerStudioView: React.FC<{ studio: StudioState; setActiveTab: (
     return () => clearTimeout(t);
   }, [toast]);
 
+  // (Each section is its own URL — App scrolls new pages to the top.)
+  useEffect(() => {
+    // Phones: the section tabs are a horizontal rail — bring the active tab into view (centered)
+    const rail = navRailRef.current;
+    const active = rail?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (rail && active && rail.scrollWidth > rail.clientWidth) {
+      const railRect = rail.getBoundingClientRect();
+      const tabRect = active.getBoundingClientRect();
+      const left = rail.scrollLeft + (tabRect.left - railRect.left) - (rail.clientWidth - tabRect.width) / 2;
+      rail.scrollTo({ left, behavior: 'smooth' });
+    }
+  }, [section]);
+
   const elapsed = isLive && startedAt !== null ? (now - startedAt) / 1000 : 0;
   const openGoLive = () => setGoLiveOpen(true);
   const openEndLive = () => setEndLiveOpen(true);
 
   return (
-    <div className="flex-1 flex flex-col lg:flex-row min-w-0 bg-[#0E0E12]">
+    <div
+      className={`flex-1 flex flex-col lg:flex-row min-w-0 bg-[#0E0E12] ${
+        // Phones: the live console is exactly one screen tall (preview + chat), no page scroll
+        section === 'live' ? 'max-lg:h-[calc(100dvh-4rem)] max-lg:overflow-hidden' : ''
+      }`}
+    >
       {/* LEFT: studio sidebar */}
       <aside className="w-full lg:w-60 shrink-0 bg-[#13131A] border-b lg:border-b-0 lg:border-r border-white/8 lg:sticky lg:top-16 lg:h-[calc(100vh-4rem)] flex flex-col">
-        <div className="p-4 border-b border-white/6">
+        <div className={`p-4 border-b border-white/6 ${section === 'live' ? 'max-lg:hidden' : ''}`}>
           <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-3">Khu vực Streamer</p>
           <div className="flex items-center gap-3">
             <img
@@ -85,7 +107,7 @@ export const StreamerStudioView: React.FC<{ studio: StudioState; setActiveTab: (
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3">
-          <div className="flex lg:flex-col gap-1 overflow-x-auto no-scrollbar">
+          <div ref={navRailRef} className="flex lg:flex-col gap-1 overflow-x-auto no-scrollbar">
             {NAV.map((item) => {
               const active = section === item.id;
               return (
@@ -127,7 +149,7 @@ export const StreamerStudioView: React.FC<{ studio: StudioState; setActiveTab: (
       </aside>
 
       {/* RIGHT: section content */}
-      <main className="flex-1 min-w-0">
+      <main className={`flex-1 min-w-0 ${section === 'live' ? 'max-lg:min-h-0 max-lg:flex max-lg:flex-col' : ''}`}>
         {section === 'live' ? (
           <LiveManager studio={studio} onRequestGoLive={openGoLive} onRequestEndLive={openEndLive} />
         ) : (

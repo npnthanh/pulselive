@@ -1,7 +1,8 @@
-import React, { useCallback, useState } from 'react';
-import { Radio, Search, Bell, Sparkles, Flame, ShoppingBag, Swords } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Search, Bell, Sparkles, Flame, ShoppingBag, Swords, X } from 'lucide-react';
 import { STREAM_CHANNELS, type StreamChannel } from '../data/mockData';
 import { SettingsMenu, type Language } from './SettingsMenu';
+import { useDismiss } from '../hooks/useDismiss';
 
 export type ActiveTab = 'home' | 'watch' | 'studio' | 'channel' | 'wallet' | 'account';
 export type BrandTheme = 'violet' | 'kick' | 'coral';
@@ -33,9 +34,22 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
+  // Phones hide the inline search bar; this toggles it as a full-width row under the header
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   // Only one header dropdown open at a time
   const [openMenu, setOpenMenu] = useState<'notifications' | 'settings' | null>(null);
   const showNotifications = openMenu === 'notifications';
+  const notificationsRef = useRef<HTMLDivElement | null>(null);
+  useDismiss(showNotifications, [notificationsRef], () => setOpenMenu(null));
+
+  const searchBoxRef = useRef<HTMLDivElement | null>(null);
+  const searchToggleRef = useRef<HTMLButtonElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  useDismiss(mobileSearchOpen, [searchBoxRef, searchToggleRef], () => setMobileSearchOpen(false));
+  // Opening the phone search row focuses the field right away (blur then closes it as before)
+  useEffect(() => {
+    if (mobileSearchOpen) searchInputRef.current?.focus();
+  }, [mobileSearchOpen]);
   const handleSettingsOpenChange = useCallback(
     (open: boolean) => setOpenMenu((prev) => (open ? 'settings' : prev === 'settings' ? null : prev)),
     []
@@ -48,32 +62,27 @@ export const Navbar: React.FC<NavbarProps> = ({
       c.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const themeBadgeColor =
-    brandTheme === 'violet'
-      ? 'from-violet-600 to-cyan-500'
-      : brandTheme === 'kick'
-      ? 'from-emerald-500 to-lime-400'
-      : 'from-rose-500 to-amber-500';
-
   return (
-    <header className="sticky top-0 z-50 h-16 w-full bg-[#121218]/90 backdrop-blur-xl border-b border-white/8 px-4 lg:px-6 flex items-center justify-between gap-3">
+    <header className="sticky top-0 z-50 h-16 w-full bg-[#121218]/90 backdrop-blur-xl border-b border-white/8 px-3 sm:px-4 lg:px-6 flex items-center justify-between gap-2 sm:gap-3">
       {/* Left: Brand Logo & Primary Navigation */}
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-6 min-w-0">
         <button
           onClick={() => setActiveTab('home')}
-          className="flex items-center gap-2.5 group focus:outline-none cursor-pointer"
+          className="flex items-center gap-2 sm:gap-2.5 group focus:outline-none cursor-pointer min-w-0"
         >
-          <div
-            className={`w-9 h-9 rounded-xl bg-gradient-to-br ${themeBadgeColor} flex items-center justify-center shadow-lg transition-transform group-hover:scale-105`}
-          >
-            <Radio className="w-5 h-5 text-white animate-pulse" />
-          </div>
+          <img
+            src="/brand/logo-mark.svg"
+            alt=""
+            width={36}
+            height={36}
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl shadow-lg transition-transform group-hover:scale-105 shrink-0"
+          />
           <div className="flex flex-col text-left">
             <div className="flex items-center gap-1.5">
-              <span className="font-extrabold text-lg tracking-tight text-white">
+              <span className="max-[379px]:hidden font-extrabold text-base sm:text-lg tracking-tight text-white whitespace-nowrap">
                 PULSE<span className="font-light opacity-85">LIVE</span>
               </span>
-              <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30">
+              <span className="hidden sm:inline text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30">
                 PRO
               </span>
             </div>
@@ -85,7 +94,14 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       {/* Center: Live Search Bar with Instant Suggestions */}
-      <div className="relative flex-1 max-w-md hidden sm:block">
+      <div
+        ref={searchBoxRef}
+        className={`${
+          mobileSearchOpen
+            ? 'absolute left-0 right-0 top-full px-3 py-2.5 bg-[#121218] border-b border-white/8'
+            : 'hidden'
+        } sm:relative sm:top-auto sm:block sm:flex-1 sm:max-w-md sm:p-0 sm:bg-transparent sm:border-0`}
+      >
         <div
           className={`flex items-center bg-[#1A1A24] border rounded-xl px-3.5 py-2 transition-all ${
             searchFocused ? 'border-white/30 ring-2 ring-white/10' : 'border-white/8'
@@ -93,13 +109,19 @@ export const Navbar: React.FC<NavbarProps> = ({
         >
           <Search className="w-4 h-4 text-zinc-400 mr-2.5 shrink-0" />
           <input
+            ref={searchInputRef}
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onFocus={() => setSearchFocused(true)}
-            onBlur={() => setTimeout(() => setSearchFocused(false), 180)}
+            onBlur={() =>
+              setTimeout(() => {
+                setSearchFocused(false);
+                setMobileSearchOpen(false);
+              }, 180)
+            }
             placeholder="Tìm streamer, giải đấu VALORANT, phòng PK, sản phẩm..."
-            className="w-full bg-transparent text-xs text-white placeholder-zinc-500 focus:outline-none"
+            className="w-full bg-transparent text-sm sm:text-xs text-white placeholder-zinc-500 focus:outline-none"
           />
           {searchQuery && (
             <button
@@ -113,7 +135,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Dropdown Search Results */}
         {searchFocused && (
-          <div className="absolute left-0 right-0 mt-2 bg-[#181822] border border-white/12 rounded-2xl shadow-2xl p-3 z-50">
+          <div className="absolute left-3 right-3 sm:left-0 sm:right-0 mt-2 bg-[#181822] border border-white/12 rounded-2xl shadow-2xl p-3 z-50">
             <div className="flex items-center justify-between px-2 pb-2 border-b border-white/8">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
                 <Flame className="w-3.5 h-3.5 text-orange-400" />
@@ -128,6 +150,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   onClick={() => {
                     onSelectChannel(channel);
                     setActiveTab('watch');
+                    setMobileSearchOpen(false);
                   }}
                   className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-white/6 transition-colors text-left cursor-pointer"
                 >
@@ -165,26 +188,39 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       {/* Right: Wallet, Notifications, Settings, Account */}
-      <div className="flex items-center gap-2.5">
-        {/* Wallet / Coins Balance */}
+      <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+        {/* Mobile-only search toggle (the inline bar is hidden below sm) */}
+        <button
+          ref={searchToggleRef}
+          onClick={() => setMobileSearchOpen((open) => !open)}
+          className="sm:hidden p-1.5 rounded-xl bg-[#1A1A24] hover:bg-white/10 border border-white/8 text-zinc-300 cursor-pointer"
+          title={mobileSearchOpen ? 'Đóng tìm kiếm' : 'Tìm kiếm'}
+          aria-expanded={mobileSearchOpen}
+        >
+          {mobileSearchOpen ? <X className="w-4 h-4" /> : <Search className="w-4 h-4" />}
+        </button>
+
+        {/* Wallet / Coins Balance (phones: compact — balance only) */}
         <button
           onClick={() => setActiveTab('wallet')}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition-all cursor-pointer"
+          className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition-all cursor-pointer whitespace-nowrap"
+          title="Ví Xu — nạp thêm"
         >
-          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+          <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
           <span className="text-xs font-bold text-amber-300 tabular-nums">
-            {coins.toLocaleString('vi-VN')} Xu
+            {coins.toLocaleString('vi-VN')}
+            <span className="hidden sm:inline"> Xu</span>
           </span>
-          <span className="text-[10px] font-bold bg-amber-400 text-slate-950 px-1.5 py-0.5 rounded-md">
+          <span className="hidden sm:inline text-[10px] font-bold bg-amber-400 text-slate-950 px-1.5 py-0.5 rounded-md">
             + Nạp
           </span>
         </button>
 
         {/* Notification Bell */}
-        <div className="relative">
+        <div ref={notificationsRef} className="relative">
           <button
             onClick={() => setOpenMenu(showNotifications ? null : 'notifications')}
-            className="relative p-2 rounded-xl bg-[#1A1A24] hover:bg-white/10 border border-white/8 text-zinc-300 cursor-pointer"
+            className="relative p-1.5 sm:p-2 rounded-xl bg-[#1A1A24] hover:bg-white/10 border border-white/8 text-zinc-300 cursor-pointer"
             title="Thông báo"
           >
             <Bell className="w-4 h-4" />
@@ -194,7 +230,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 bg-[#181822] border border-white/12 rounded-2xl shadow-2xl p-3 z-50">
+            <div className="fixed left-3 right-3 top-[4.5rem] sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-80 bg-[#181822] border border-white/12 rounded-2xl shadow-2xl p-3 z-50">
               <div className="flex items-center justify-between pb-2 border-b border-white/8">
                 <span className="text-xs font-bold text-white">Thông báo mới</span>
                 <button
@@ -237,7 +273,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* User Avatar */}
         <button
           onClick={() => setActiveTab('account')}
-          className={`w-9 h-9 rounded-xl overflow-hidden border-2 transition-all cursor-pointer shrink-0 ${
+          className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl overflow-hidden border-2 transition-all cursor-pointer shrink-0 ${
             activeTab === 'account'
               ? 'border-(--brand-light) ring-2 ring-(--brand-soft)'
               : 'border-white/15 hover:border-white/40'
